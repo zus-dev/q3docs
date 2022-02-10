@@ -1,0 +1,1015 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<link rel="stylesheet" type="text/css" href="./outline1.css">
+<title>BASEQ3 Runthrough, Server-side</title>
+</head>
+<body>
+<h1>BASEQ3 Runthrough, Server-side</h1>
+
+<h2>Synopsis</h2><p>Illustration of an execution path through a Q3 game module (baseq3), from startup through gameplay though shutdown, for dedicated server mode, in outline form.</p>
+
+<div class="indented">
+<p>
+<strong>Motivation</strong>:
+Enhanced understanding of Q3A to assist in modding and total conversions.
+
+</div>
+<div class="indented">
+<p>
+<strong>Caveats</strong>:
+This document certainly is not a thorough understanding nor explanation of Q3.
+Information was gleaned by poring through the game source text, with minimal testing.
+Most of the statements made in this document are based on source comments and <q>gut feelings</q>.
+
+</div>
+<h2><a name="engineStart">Engine Start</a></h2>
+<p>
+Before the game (modification) even loads, Quake 3 on startup:
+<ol>
+<li>searches for/in pak (.pk3) files according to the server cvar <q><span class="cvarname">fs_game</span></q></li>
+<li>runs startup configuration (.cfg) files <tt class="filename">default.cfg</tt> and <tt class="filename">q3config.cfg</tt></li>
+<li>initializes the dynamic memory hunk (<q><span class="cvarname">com_hunkMegs</span></q>, <q><span class="cvarname">com_soundMegs</span></q>, <q><span class="cvarname">com_zoneMegs</span></q>)</li>
+<li>opens network sockets for listening</li>
+</ol>
+<h2><a name="gameStart">Game Start</a></h2>
+<p>
+The most straight-forward way to launch the game is to start a valid map, with the server command <q>map <var class="varname">mapname</var></q>.
+Quake 3 on game start:
+<ol>
+<li>loads the map/level (.bsp) file</li>
+<li>looks through the pak (.pk3) files found on startup</li>
+<li>loads the game qvm file (<tt class="filename">qagame.qvm</tt>)</li>
+<li>compiles the qvm bytecode to native code if <var class="varname">vm_game</var> is set to 2</li>
+<li>jumps to the QVM procedure linked at code address 0 (i.e. <var class="funcname">vmMain()</var>)</li>
+<li>upon returning from the QVM procedure, does some other things (such as network tasks, reading in server commands, complaining with Hitch Warnings, etc.)</li>
+<li>jumps to code address 0 again</li>
+<li> rinse, lather, repeat.</li>
+</ol>
+<h2><a name="vmMain">vmMain</a></h2>
+<p>
+The QVM file lacks a symbol table, so the QVM interpreter/compiler subsystem must make a blind decision on a reasonable entry point into the QVM.
+Currently, Q3 simply branches to QVM code address 0.
+While Q3 (the engine) decides to jump to code address 0, the game (mod) expects Q3A to jump into the function named <var class="funcname">vmMain()</var>.
+To ensure these two expectations coincide, <var class="funcname">vmMain()</var> must be the first function compiled before any other function into QVM bytecode.
+This means the function <var class="funcname">vmMain()</var> must be the first fully-defined function in the first assembled file.
+In baseq3, this is <var class="funcname">vmMain()</var> in g_main.c, which gets assembled first as specified in the file game.q3asm, thus ensuring <var class="funcname">vmMain()</var> links as code address 0.
+Note that other variables may be declared/defined before <var class="funcname">vmMain()</var>, and other functions may be prototyped/declared before <var class="funcname">vmMain()</var>, but the first function <em>body</em> to be compiled must be <var class="funcname">vmMain()</var>.
+
+<p>
+The function at code address 0 is the critical function.
+The associated name can be anything, but for consistency I shall refer to code address 0 as <q>vmMain</q>, as it is in baseq3.
+
+<p>
+On each server frame (time period determined by cvar <q><span class="cvarname">sv_fps</span></q>), the Q3 engine calls <var class="funcname">vmMain()</var> with a number of arguments.
+The first argument (<var class="varname">command</var> in baseq3) determines what <q>major action</q> to which the game should react.
+These actions are enumerated in <tt class="filename">g_public.h</tt>, as enum type <var class="typename">gameExport_t</var>.
+Since the arguments to <var class="funcname">vmMain()</var> are specified by the Q3 engine, and merely reflected in <var class="typename">gameExport_t</var>, modifying <var class="typename">gameExport_t</var> does not change anything in the game module, except possibly to confuse it badly.
+
+
+
+<h3><a name="vmMain.overview">Overview: vmMain command/major game function</a></h3>
+<p>
+A quick overview of the vmMain commands (major game functions) in baseq3:
+<ul>
+<li><a href="#vmMain.GAME_INIT"><tt class="constname">GAME_INIT</tt></a> - called on game load/startup.</li>
+<li><a href="#vmMain.GAME_SHUTDOWN"><tt class="constname">GAME_SHUTDOWN</tt></a> - called on end of map/level or server quitting, before actual exit.</li>
+<li><a href="#vmMain.GAME_CLIENT_CONNECT"><tt class="constname">GAME_CLIENT_CONNECT</tt></a> - called when a new player connects to the server.</li>
+<li><a href="#vmMain.GAME_CLIENT_THINK"><tt class="constname">GAME_CLIENT_THINK</tt></a> - called (frequency unknown) to handle player inputs and movements.</li>
+<li><a href="#vmMain.GAME_CLIENT_USERINFO_CHANGED"><tt class="constname">GAME_CLIENT_USERINFO_CHANGED</tt></a> - called when a client userinfo record has changed (such as name or player model) and the new information needs to be relayed to all players.</li>
+<li><a href="#vmMain.GAME_CLIENT_DISCONNECT"><tt class="constname">GAME_CLIENT_DISCONNECT</tt></a> - called when a client disconnect (voluntary disconnect, kicked, timed out), for selective cleanup.
+Not called on map/level end (which is wholesale destruction of QVM memory, See also <a href="#GAME_SHUTDOWN">GAME_SHUTDOWN</a>).</li>
+<li><a href="#vmMain.GAME_CLIENT_BEGIN"><tt class="constname">GAME_CLIENT_BEGIN</tt></a> - called when a client's connection is established, map loaded, and ready to start playing (i.e. supply user inputs).</li>
+<li><a href="#vmMain.GAME_CLIENT_COMMAND"><tt class="constname">GAME_CLIENT_COMMAND</tt></a> - when a client sends a command to the server (such as <q><kbd class="command">say</kbd></q>, <q><kbd class="command">say_team</kbd></q>, or <q><kbd class="command">kill</kbd></q>).</li>
+<li><a href="#vmMain.GAME_RUN_FRAME"><tt class="constname">GAME_RUN_FRAME</tt></a> - called once per server frame to animate and move all non-player entities that need movement or thinking.</li>
+<li><a href="#vmMain.GAME_CONSOLE_COMMAND"><tt class="constname">GAME_CONSOLE_COMMAND</tt></a> - called to handle server-side commands (from admin), including rcon commands.</li>
+<li><tt class="constname">BOTAI_START_FRAME</tt> - Schedules and executes bot user command (framerate of AI is not synchronized with server framerate). <!--(cyrri)--></li>
+</ul>
+<p>
+The call to <var class="funcname">vmMain()</var> is made by the Q3 engine.
+The parameters passed to vmMain are marshalled by the Q3 engine.
+Additions or changes to these major game functions must be implemented in the engine and reflected in the game module (mod).
+Such ability (to add or change major functions) is limited to developers with access to the Q3 engine (not mod) source.
+Currently (2002 Aug) this is Id Software itself and its direct licensees (proprietary license).
+
+
+<h3><a name="vmMain.GAME_INIT">vmMain(GAME_INIT, <var class="varname">levelTime</var>, <var class="varname">randomSeed</var>, <var class="varname">restart</var>)</a></h3>
+<p>
+When the game module is first loaded on game start, Q3 calls vmMain with major function <tt class="constname">GAME_INIT</tt>, along with three additional arguments:
+<ol>
+<li><var class="varname">levelTime</var> - the number of milliseconds the game has been in progress, usually 0 (non-zero for restarts).</li>
+<li><var class="varname">randomSeed</var> - a seed value for the random number generator (RNG).</li>
+<li><var class="varname">restart</var> - ???, affects bot AI initialization only.</li>
+</ol>
+<p>
+In <var class="funcname">vmMain()</var>, the code immediately branches to <var class="funcname">G_InitGame()</var> when <var class="funcname">vmMain</var> recognizes <tt class="constname">GAME_INIT</tt>.
+
+
+<h4><a name="G_InitGame">G_InitGame(levelTime, randomSeed, restart)</a></h4>
+<p>
+<ol>
+<li>Initialize random number generator with <var class="varname">randomSeed</var> -- <kbd class="">srand(randomSeed)</kbd>.</li>
+<li>Register cvars (associates cvars in the Q3 engine with cvar_t variables in game engine) -- <var class="funcname">G_RegisterCvars()</var>.
+ <ol>
+ <li>Goes through all entries in array <var class="varname">gameCvarTable[]</var>, associating the cvar in the Q3 engine with the cvar_t variable in the game engine (QVM memory).</li>
+ </ol></li><li>Initialize banlist -- <var class="funcname">G_ProcessIPBans()</var>.
+ <ol>
+ <li>Reads list of space-separated IP addresses from cvar <q><span class="cvarname">g_banIPs</span></q>.</li>
+ <li>Adds each banned address to ban filter list -- <var class="funcname">AddIP()</var>.
+  <ol>
+  <li>Maximum of 1024 banned addresses.</li>
+  <li>Converts dotted-quad notation to an internal filter format -- <var class="funcname">StringToFilter()</var>.</li>
+  <li>Adds filter record to array <var class="varname">ipFilters[]</var>.</li>
+  </ol>  </li> </ol> </li><li>Initialize the in-QVM dynamic memory pool of 256KB (hey, 64KB sent us to the moon!) -- <var class="funcname">G_InitMemory()</var>.</li>
+<li>Start logging if so configured.</li>
+<li>Initialize world session information -- <var class="funcname">G_InitWorldSession()</var>.
+ <ol>
+ <li>Resets cvar <q><span class="cvarname">session</span></q></li>
+ </ol> </li><li>Initialize game entities.</li>
+<li>Initialize game clients (players).</li>
+<li>Tell the Q3 engine about g_entities, for network engine purposes -- <var class="funcname">trap_LocateGameData()</var>.</li>
+<li>Initialize body queue (for sinking corpses, etc.) -- <var class="funcname">InitBodyQue()</var>.
+ <ol>
+ <li>Allocates 8 game entities and reserves them for the body queue.</li>
+ </ol> </li><li>Initialize item registration -- <var class="funcname">ClearRegisteredItems()</var>.
+ <ol>
+ <li>Clears the array <var class="varname">itemRegistered[]</var>.</li>
+ <li>Registers machine gun -- <var class="funcname">RegisterItem()</var>.
+  <ol>
+  <li>Sets <var class="varname">itemRegistered[10]</var> to true (offset for machine gun weapon item)</li>
+  </ol>  </li> <li>Registers gauntlet -- <var class="funcname">RegisterItem()</var>.
+  <ol>
+  <li>Sets <var class="varname">itemRegistered[8]</var> to true (offset for gauntlet weapon item)</li>
+  </ol>  </li> </ol> </li><li>Spawn map entities -- <var class="funcname">SpawnEntitiesFromString()</var>.
+ <ol>
+ <li>Enable entities spawning with <kbd class="">level.spawning = qtrue</kbd>.</li>
+ <li>Parse <var class="varname">worldspawn</var> variable, which must be the first such entity in the map file -- <var class="funcname">SP_worldspawn()</var>.
+  <ol>
+  <li>Read a spawn string -- <var class="funcname">G_SpawnString("classname", "", &amp;s)</var>.
+   <ol>
+   <li>Retrieve the next spawn string, complain if the spawn string key doesn't match the first argument (i.e. "classname"), otherwise store the value into the third argument.  The second argument provides a default value if no value is specified in the map file.</li>
+   </ol>   </li>  <li>Complain if the string isn't the worldspawn variable, with a fatal error (game stops).</li>
+  <li>Set ConfigString <span class="configstring">CS_GAME_VERSION</span> according to mod.</li>
+  <li>Set ConfigString <span class="configstring">CS_LEVEL_START_TIME</span> according to the recorded start time.</li>
+  <li>Set ConfigString <span class="configstring">CS_MUSIC</span> (map-specific background music) according to spawn entity -- <var class="funcname">G_SpawnString("music", "", &amp;s)</var>.</li>
+  <li>Set ConfigString <span class="configstring">CS_MESSAGE</span> (map-specific message) according to spawn entity -- <var class="funcname">G_SpawnString("message", "", &amp;s)</var>.</li>
+  <li>Set ConfigString <span class="configstring">CS_MOTD</span> (server MOTD) according to server cvar <q><span class="cvarname">sv_motd</span></q>.</li>
+  <li>Set cvars <q><span class="cvarname">g_gravity</span></q>, <q><span class="cvarname">g_enableDust</span></q>, and <q><span class="cvarname">g_enableBreath</span></q> according to spawn entities.</li>
+  <li>Record the existence of the worldspawn entity.</li>
+  <li>Set warmup time as needed, based on cvar <q><span class="cvarname">g_doWarmup</span></q>.</li>
+  </ol>  </li> <li>Parse spawn variables -- <var class="funcname">G_ParseSpawnVars()</var>.
+  <ol>
+  <li>Expect an opening brace (<q>{</q>), fail miserably if not found -- <var class="funcname">trap_GetEntityToken()</var>.</li>
+  <li>Read all key/value pairs.
+   <ol>
+   <li>Read a token as a key -- <var class="funcname">trap_GetEntityToken()</var>.</li>
+   <li>Stop loop if this token is a closing brace (<q>}</q>).</li>
+   <li>Read a token as a value -- <var class="funcname">trap_GetEntityToken()</var>.</li>
+   <li>Complain if this token is a closing brace (<q>}</q>).</li>
+   <li>Complain if there are now more than 64 spawn variables.</li>
+   <li>Record spawn variable key.</li>
+   <li>Record spawn variable value.</li>
+   </ol>   </li>  </ol>  </li> <li>Spawn entities from spawn variables -- <var class="funcname">G_SpawnGEntityFromSpawnVars()</var>.
+  <ol>
+  <li>Allocate a game entity -- <var class="funcname">G_Spawn()</var>.</li>
+  <li>Parse the fields for each spawn variable -- <var class="funcname">G_ParseField()</var>.
+   <ol>
+   <li>???!</li>
+   <li>Takes key/value pairs and sets fields in game entity using arcane binary doohackery.</li>
+   </ol>   </li>  <li>Destroy entity according to game type and gametype spawnflags (<tt class="constname">notsingle</tt>, <tt class="constname">notteam</tt>, <tt class="constname">notfree</tt>).</li>
+  <li>Destroy entity according to spawn variable <var class="varname">gametype</var> and active game type.</li>
+  <li>Adjust origins(?)</li>
+  <li>Call assocated game spawn function -- <var class="funcname">G_CallSpawn()</var>.
+   <ol>
+   <li>Complain if entity classname is <tt class="constname">NULL</tt>.</li>
+   <li>Attempt to spawn as an item -- <var class="funcname">G_SpawnItem()</var>.
+    <ol>
+    <li>Set entity field <var class="varname">random</var> according to spawn variable <var class="varname">random</var>.</li>
+    <li>Set entity field <var class="varname">wait</var> according to spawn variable <var class="varname">wait</var>.</li>
+    <li>Register this item -- <var class="funcname">RegisterItem()</var>.</li>
+    <li>Check if item is disabled and don't spawn if so -- <var class="funcname">G_ItemDisabled()</var>.
+     <ol>
+     <li>Returns the value of cvar <q><span class="cvarname">disable_<var class="varname">classname</var></span></q>.  So to disable quad damage would be <q><kbd class="command">/set disable_quaddamage 1</kbd></q>.</li>
+     </ol>     </li>    <li>Record global/master/templated item information.</li>
+    <li>Set think time and function -- <var class="funcname">FinishSpawningItem()</var>.
+     <ol>
+     <li>Makes items fall to floor.  Falling is disabled at spawn time to prevent items spawning within other entities.</li>
+     </ol>     </li>    <li>Make entity bouncy.</li>
+    <li>Set powerup fields for powerup items (in particular, <var class="varname">speed</var> according to spawn variable <var class="varname">noglobalsound</var>).</li>
+    </ol>    </li>   <li>If the entity didn't spawn as an item, attempt to spawn as a normal entity by finding the classname and calling the associated spawn function -- <var class="funcname">s-&gt;spawn()</var>.
+(<b class="xxx">XXX</b>: <var class="varname">spawn[]</var> and list of <var class="funcname">SP_*()</var> functions)
+</li>
+   <li>Failing that, complain about lack of spawn function.</li>
+   </ol>   </li>  <li>Destroy object if no such spawn function exists.</li>
+  </ol>  </li> </ol> </li><li>Initialize teams information -- <var class="funcname">G_FindTeams()</var>.
+ <ol>
+ <li>Create a linked list for each team composed of all entities belonging to the team.  The team master is the lowest numbered entity that is not a slave.</li>
+ </ol> </li><li>Broadcast item registration information via ConfigString -- <var class="funcname">SaveRegisteredItems()</var>.
+ <ol>
+ <li>Sets ConfigString <span class="configstring">CS_ITEMS</span> to a sequence of ASCII <q>1</q> and <q>0</q> according tot he content of array <var class="varname">itemRegistered[]</var>.  The information is transmitted to all clients for precaching purposes.</li>
+ </ol> </li><li>Initialize bot AI -- <var class="funcname">BotAISetup()</var>, <var class="funcname">BotAILoadMap()</var>, <var class="funcname">G_InitBots()</var>.
+ (<b class="xxx">XXX</b>: Aieeee!)
+</li>
+<li>Various other server-side tweaks.</li>
+</ol>
+<p>
+That was just for game initialization.
+
+
+
+<h3><a name="vmMain.GAME_SHUTDOWN">vmMain(GAME_SHUTDOWN, <var class="varname">restart</var>)</a></h3>
+<p>
+When Q3 wants to shut down the game module, Q3 calls <var class="funcname">vmMain()</var> with major function <tt class="constname">GAME_SHUTDOWN</tt>, and one additional argument:
+<ol>
+<li><var class="varname">restart</var> - ???, affects bot AI initialization only.</li>
+</ol>
+<p>
+In <var class="funcname">vmMain()</var>, the code immediately branches to <var class="funcname">G_ShutdownGame()</var> when <var class="funcname">vmMain()</var> recognizes <tt class="constname">GAME_SHUTDOWN</tt>.
+
+<p>
+For map changes (as after end of round), the game module is shut down then initialized again with the new map (partly to have a clean slate for the new map's entities).
+Any data within QVM memory is irretrievably destroyed.
+Any data that needs to survive across map changes, or even map restarts, must be committed to files (disk) or cvars (Q3 engine memory).
+
+<h4><a name="G_ShutdownGame">G_ShutdownGame(restart)</a></h4>
+<p>
+<ol>
+<li>Closes any logs.</li>
+<li>Save session data -- <var class="funcname">G_WriteSessionData()</var>.
+ <ol>
+ <li>Save world session data to cvar <q><span class="cvarname">session</span></q>, which is just current gametype.</li>
+ <li>Save each client session data -- <var class="funcname">G_WriteClientSessionData()</var>.
+  <ol>
+  <li>Save to cvar <q><span class="cvarname">session<var class="varname">clientnum</var></span></q> the information pertaining to client's team, spectator time, spectator state, client being spectated, wins, losses, and teamLeader.</li>
+  </ol>  </li> </ol> </li><li>Shutdown bot AI -- <var class="funcname">BotAIShutdown()</var>.
+ <ol>
+ <li>(<b class="xxx">XXX</b>: yeah, right...)</li>
+ </ol> </li></ol>
+
+<h3><a name="vmMain.GAME_CLIENT_CONNECT">vmMain(GAME_CLIENT_CONNECT, <var class="varname">clientNum</var>, <var class="varname">firstTime</var>, <var class="varname">isBot</var>)</a></h3>
+<p>
+When a client connects to the server, Q3 calls <var class="funcname">vmMain()</var> with major function <tt class="constname">GAME_CLIENT_CONNECT</tt>, with arguments:
+<ol>
+<li><var class="varname">clientNum</var> - the assigned client number according to the Q3 engine.</li>
+<li><var class="varname">firstTime</var> - zero if a persistent connection from a previous game on the same server, non-zero if a fresh connect to the server.</li>
+<li><var class="varname">isBot</var> - non-zero if the connecting player is a bot AI.</li>
+</ol>
+<p>
+In <var class="funcname">vmMain()</var>, code immediated branches to <var class="funcname">ClientConnect()</var> when vmMain recognizes <tt class="constname">GAME_CLIENT_CONNECT</tt>.
+
+
+<h4><a name="ClientConnect">ClientConnect(clientNum, firstTime, isBot)</a></h4>
+<p>
+<ol>
+<li>Get userinfo string from client -- <var class="funcname">trap_GetUserinfo()</var>.</li>
+<li>Check if client's IP address is banned -- <var class="funcname">G_FilterPacket()</var>.
+ <ol>
+ <li>Check client's IP address against each entry in array <var class="varname">ipFilters[]</var>.</li>
+ </ol> </li><li>Check for password.</li>
+<li>Read/initialize session data -- <var class="funcname">G_InitSessionData()</var>.
+ <ol>
+ <li>Figure out a team to join; autojoin, spectator, predetermined join (same team as last game), waiting-in-line.</li>
+ </ol> </li><li>Set various flags if bot.</li>
+<li>Enact effects of client userinfo -- <var class="funcname">ClientUserinfoChanged()</var>.
+ <ol>
+ <li>Get userinfo from client (again).</li>
+ <li>Enforce sanity-check on name -- <var class="funcname">Info_Validate()</var>.
+  <ol>
+  <li></li>
+  </ol>  </li> <li>Check if local client (non-networked).</li>
+ <li>Check if client wants item prediction.</li>
+ <li>Set client name.</li>
+ <li>Set client team.</li>
+ <li>Announce any during-play name change (a client that just connected technically had a name-change from nothing to something, but this particular name change isn't announced).</li>
+ <li>Set max health (influence by <var class="varname">handicap</var> value).</li>
+ <li>Set player model.</li>
+ <li>Select skin according to team (if applicable).</li>
+ <li>Set teamtask.</li>
+ <li>Arrange a subset of userinfo into a ConfigString, stored into a <span class="configstring">CS_*</span> slot based on client number.</li>
+ </ol> </li><li>Announce team joining -- <var class="funcname">BroadcastTeamChange()</var>.
+ <ol>
+ <li>Tells everyone in the game about someone joining/changing teams.</li>
+ </ol> </li><li>Calculate client ranks -- <var class="funcname">CalculateRanks()</var>.
+ <ol>
+ <li>(<b class="xxx">XXX</b>: lotsa math and sorting...)</li>
+ </ol> </li></ol>
+
+<h2><a name="vmMain.GAME_CLIENT_THINK">vmMain(GAME_CLIENT_THINK, clientNum)</a></h2>
+<p>
+Called (frequency unknown) to handle player input to the game and player movement within the game, with one additional argument:
+<ol>
+<li><var class="varname">clientNum</var> - the client number of which to handle input.</li>
+</ol>
+<p>
+In <var class="funcname">vmMain()</var>, the code immediately branches to <var class="funcname">ClientThink()</var> when vmMain recognizes <tt class="constname">GAME_CLIENT_THINK</tt>.
+
+
+<h4><a name="ClientThink">ClientThink(clientNum)</a></h4>
+<p>
+<ol>
+<li>Retrieve user input -- <var class="funcname">trap_GetUsercmd()</var>.</li>
+<li>Mark the time input was received.</li>
+<li>If not a bot, do non-bot client think process -- <var class="funcname">ClientThink_real()</var>.</li>
+</ol>
+<h4><a name="ClientThink_real">ClientThink_real(clientNum)</a></h4>
+<p>
+<ol>
+<li>Check if client is still in <q>Connecting</q> phase.  Return from function if so.</li>
+<li>Record time of retrieval of usercmd (user input).</li>
+<li>Basic timestamp sanity check to squelch speedup cheats.</li>
+<li>Sanity checks on cvar <q><span class="cvarname">pmove_msec</span></q>.</li>
+<li>Timestamp checks for cvar <q><span class="cvarname">pmove_fixed</span></q>.</li>
+<li>Check for intermission -- <var class="funcname">ClientIntermissionThink()</var>.
+ <ol>
+ <li>Disable talk balloons and weapons.</li>
+ <li>Toggle <q>READY</q> status each time attack button is pressed (changes from low to high).</li>
+ </ol> </li><li>If client is spectator, do spectator thinking and return -- <var class="funcname">SpectatorThink()</var>.
+ <ol>
+ <li>If not following, do almost-normal movements and some triggering.</li>
+ <li>Start following or cycle to next spectatee(?) if attack button is pressed.</li>
+ </ol> </li><li>Check for inactivity timer -- <var class="funcname">ClientInactivityTimer()</var>.
+ <ol>
+ <li>If cvar <q><span class="cvarname">g_inactivity</span></q> is unset or 0, set inactivity timer to 1 minute, but don't do any actual inactivity kicking.  This gives some leeway to all players during the instant when admin decides to actually set inactivity timer during gameplay (otherwise the time since game start counts as inactivity at that instant).</li>
+ <li>Otherwise check if client is moving or doing some action, and push forward the inactivity timestamp.</li>
+ <li>Do not kick local player(s).</li>
+ <li>Otherwise check if current time surpassed inactivity timestamp and kick.</li>
+ <li>Otherwise see if time to send 10-second warning.</li>
+ </ol> </li><li>Clear overhead reward icons if time expired.</li>
+<li>Check movement style (noclip, dead, normal).</li>
+<li>Inherit gravity value.</li>
+<li>Set client speed.</li>
+<li>Increase client speed due to any powerups (haste, scout).</li>
+<li>Prepare for pmove (predictable movement) calculation.</li>
+<li>Check for gauntlet hit for the gauntlet-hit animation if attack button is held with gauntlet, store into <var class="varname">pm.gauntletHit</var> -- <var class="funcname">CheckGauntletAttack()</var>.
+ <ol>
+ <li>See if any damageable object is within 32 units of player.</li>
+ <li>Create blood splatters.</li>
+ <li>Increase damage due to powerups (Quad, Doubler).</li>
+ <li>Apply damage to victim.</li>
+ <li>Return true if gauntlet made a hit, otherwise return false.</li>
+ </ol> </li><li>Check for gesturing and set animation if needed.</li>
+<li>Check for invulnerability powerup (Team Arena only).</li>
+<li>Make pmove calculations -- <var class="funcname">Pmove()</var>.</li>
+<li>Save results of pmove into client structs.</li>
+<li>Smooth out if cvar <q><span class="cvarname">g_smoothClients</span></q> is non-zero -- <var class="funcname">BG_PlayerStateToEntityState()</var>.</li>
+<li>Snap various vectors (round components to nearest integer).</li>
+<li>Execute client events -- <var class="funcname">ClientEvents()</var>.
+ <ol>
+ <li>Retrieve next client event.</li>
+ <li>Check fall damages (<tt class="constname">EV_FALL_MEDIUM</tt>, <tt class="constname">EV_FALL_FAR</tt>):
+  <ol>
+  <li>Check that fall damage is being applied to a player.</li>
+  <li>Check if fall damage is disabled (cvar <q><span class="cvarname">g_dmflags</span></q> &amp; <tt class="constname">DF_NO_FALLING</tt> (8)).</li>
+  <li>Set damage amount, 10 for far, 5 for medium.</li>
+  <li>Set pain debounce time (<b class="xxx">XXX</b>: what??)</li>
+  <li>Apply damage to player -- <var class="funcname">G_Damage()</var>.</li>
+  </ol>  </li> <li>Check weapon firing (<tt class="constname">EV_FIRE_WEAPON</tt>):
+  <ol>
+  <li>Fire weapon -- <var class="funcname">FireWeapon()</var>.
+   <ol>
+   <li>(<b class="xxx">XXX</b>: Aieee!)</li>
+   </ol>   </li>  </ol>  </li> <li>Check using handheld teleporter (<tt class="constname">EV_USE_ITEM1</tt>):
+  <ol>
+  <li>Drop CTF flag(s).</li>
+  <li>Select a random spawn point -- <var class="funcname">SelectSpawnPoint()</var>.</li>
+  <li>Teleport the player to the new point -- <var class="funcname">TeleportPlayer()</var>.
+   <ol>
+   <li>Create appropriate teleport effects at old and new points.</li>
+   <li>Unlink player from game -- <var class="funcname">trap_UnlinkEntity()</var>.</li>
+   <li>Place player at new spawn point with some altered properties (speed, angle).</li>
+   <li>Telefrag.</li>
+   <li>Update from pmove calculations -- <var class="funcname">BG_PlayerStateToEntityState()</var>.</li>
+   <li>Link player back into game.</li>
+   </ol>   </li>  </ol>  </li> <li>Check using medkit (<tt class="constname">EV_USE_ITEM2</tt>):
+  <ol>
+  <li>Sets health to player's maximum health plus 25; the maximum health may vary according to handicap.  The medkit is <q>used up</q> (removed) elsewhere.<!--(cyrri--></li>
+  </ol>  </li> <li>Check using kamikaze (Team Arena only, <tt class="constname">EV_USE_ITEM3</tt>):</li>
+ <li>Check using portal(???) (Team Arena only, <tt class="constname">EV_USE_ITEM4</tt>):</li>
+ <li>Check using invulnerability (Team Arena only, <tt class="constname">EV_USE_ITEM5</tt>):</li>
+ <li>Ignore other event types.</li>
+ </ol> </li><li>Link entity into the world and PVS -- <var class="funcname">trap_LinkEntity()</var>.</li>
+<li>Trigger any... triggers -- <var class="funcname">G_TouchTriggers()</var>.
+ <ol>
+ <li>Ensure the triggerer(?) is a living player.</li>
+ <li>Find all entities reaching into player's space (bounding box), store list into array <var class="varname">touch[]</var>.</li>
+ <li>For each touched entity:
+  <ol>
+  <li>Ignore if not a trigger.</li>
+  <li>If spectating, ignore certain triggers.</li>
+  <li>If an item, ignore (since item-touching is handled elsewhere) -- <var class="funcname">BG_PlayerTouchesItem()</var></li>
+  <li>Otherwise check that the player really is in contact with this entity -- <var class="funcname">trap_EntityContact()</var>.</li>
+  <li>If this entity has a <var class="funcname">touch()</var> function, call it -- <var class="funcname">hit-&gt;touch()</var>.</li>
+  <li>If client has a <var class="funcname">touch()</var> function, call it -- <var class="funcname">ent-&gt;touch()</var>.</li>
+  </ol>  </li> <li>Check for jumppad.</li>
+ </ol> </li><li>Some bot AI checks -- <var class="funcname">BotTestAAS()</var>.
+ <ol>
+ <li>(<b class="xxx">XXX</b>: foo)</li>
+ </ol> </li><li>Interact with other objects/entities -- <var class="funcname">ClientImpacts()</var>.
+ <ol>
+ <li>For each entity the player is touching (<var class="varname">pm-&gt;numtouch</var>, <var class="varname">pm-&gt;touchents[]</var>):
+  <ol>
+  <li>Run the player's <var class="funcname">touch()</var> function, if it exists.</li>
+  <li>Run the other entity's <var class="funcname">touch()</var> function, if it exists.</li>
+  </ol>  </li> </ol> </li><li>Save results of triggers and events.</li>
+<li>Swap/latch button actions, helps check for button press/release.</li>
+<li>If player is dead, check for respawning, based on button press or cvar <q><span class="cvarname">g_forcerespawn</span></q> -- <var class="funcname">respawn()</var>.
+ <ol>
+ <li>Create a corpse in body queue -- <var class="funcname">CopyToBodyQue()</var>.
+  <ol>
+  <li>Selects next spot in queue, overwriting as it goes.</li>
+  <li>Unlink the body queue entry -- <var class="funcname">trap_UnlinkEntity()</var>.</li>
+  <li>Copy properties of corpse, unset inapplicable properties (such as powerups).</li>
+  <li>Set to last frame of death animation, to prevent looped animation.</li>
+  <li>Set movement properties.</li>
+  <li>Link corpse into game -- <var class="funcname">trap_LinkEntity()</var>.</li>
+  </ol>  </li> <li>Spawn the player -- <var class="funcname">ClientSpawn()</var>.
+  <ol>
+  <li>If a spectator, just set a spawn point for spectators -- <var class="funcname">SelectSpectatorSpawnPoint()</var>.
+   <ol>
+   <li>Spawn at intermission location -- <var class="funcname">FindIntermissionPoint()</var>.
+    <ol>
+    <li>Look for <tt class="constname">info_player_intermission</tt> entity.</li>
+    <li>Set viewing angles, towards a target if specified.</li>
+    <li>If intermission entity does not exist, the map creator is a moron:
+     <ol>
+     <li>Select a single-player spawn point as if normally playing, to use as intermission entity -- <var class="funcname">SelectSpawnPoint()</var>.</li>
+     </ol>     </li>    </ol>    </li>   </ol>   </li>  <li>If a team game, choose spawn point for team games -- <var class="funcname">SelectCTFSpawnPoint()</var>.
+   <ol>
+   <li>Choose a team spawn point -- <var class="funcname">SelectRandomTeamSpawnPoint()</var>.
+    <ol>
+    <li>If just joining the team, look for spawn point named <tt class="constname">team_CTF_redplayer</tt> or <tt class="constname">team_CTF_blueplayer</tt> according to team.</li>
+    <li>If not just joining (as in having been just fragged and respawned), look for spawn point named <tt class="constname">team_CTF_redspawn</tt> or <tt class="constname">team_CTF_bluespawn</tt>.</li>
+    <li>Look through each spawn point of the appropriate name:</li>
+    <li>If the spot would cause a telefrag, choose next spawn point.  Otherwise record the location in array <var class="varname">spots[]</var>.</li>
+    <li>If a telefrag-less spot doesn't exist, just use first spawn point.  Otherwise, choose a random spawn point from <var class="varname">spots[]</var>.</li>
+    <li>Return the spawn point information.</li>
+    </ol>    </li>   <li>If there is no team spawn point, choose a single-player (<tt class="constname">info_player_deathmatch</tt>) spawnpoint -- <var class="funcname">SelectSpawnPoint()</var>.</li>
+   </ol>   </li>  <li>Otherwise choose spawn point single-player style:
+   <ol>
+   <li>If spawned for the first time, choose a <q>good-looking</q> spot -- <var class="funcname">SelectInitialSpawnPoint()</var>.
+    <ol>
+    <li>Look for a spawn point (<tt class="constname">info_player_deathmatch</tt>) with the <var class="varname">initial</var> flag set (0x01).</li>
+    <li>If no such special spawn point exists, or if the initial spawn point would cause telefrag, choose spawn point the normal way with <var class="funcname">SelectSpawnPoint()</var>.</li>
+    </ol>    </li>   <li>If not spawned for first time, select a spawn point far from death point -- <var class="funcname">SelectSpawnPoint()</var>.
+    <ol>
+    <li>Just calls <var class="funcname">SelectRandomFurthestSpawnPoint()</var>.
+     <ol>
+     <li>Look through all <tt class="constname">info_player_deathmatch</tt> entities:
+      <ol>
+      <li>Check if telefrag would occur, choose another spot if so -- <var class="funcname">SpotWouldTelefrag()</var>.
+       <ol>
+       <li>Check if any players occupy some of the space the would-be-spawned player would occupy.</li>
+       </ol>       </li>      <li>Record distance of this spawn point from the avoidPoint (i.e. where player's death occurred) into list_dist and list_spot using [reverse] insertion sort.</li>
+      <li>If no spawn point can avoid telefrag, choose first spawn point (<tt class="constname">info_player_deathmatch</tt>).</li>
+      <li>Now that list_dist and list_spot are sorted in decreasing order of distances (furthest first), choose a random spot from the first half of the list.</li>
+      <li>Return selected spawn point location.</li>
+      </ol>      </li>     </ol>     </li>    </ol>    </li>   <li>Juggle spawn point according to <tt class="constname">nobot</tt> or <tt class="constname">nohuman</tt> flags for spawn points.</li>
+   <li>Initialize various client flags, fields, and records.</li>
+   <li>Provide client with gauntlet and machine gun, with some ammo.</li>
+   <li>Set spawn-time health.</li>
+   <li>Move client position to spawn point -- <var class="funcname">G_SetOrigin()</var>.</li>
+   <li>Set client view angle -- <var class="funcname">SetClientViewAngle()</var>.
+    <ol>
+    <li>Sets angle vectors based on spawn point variables (<b class="xxx">XXX</b>: which one?).</li>
+    </ol>    </li>   <li>Telefrag as needed -- <var class="funcname">G_KillBox()</var>.</li>
+   <li>Link client into game -- <var class="funcname">trap_LinkEntity()</var>.</li>
+   <li>Bring up the base weapon, the machine gun.</li>
+   <li>Prevent full-tilt running at spawn time.</li>
+   <li>Reset inactivity timer.</li>
+   <li>Set initial animation.</li>
+   <li>If on intermission, do intermission stuff -- <var class="funcname">MoveClientToIntermission()</var>.
+    <ol>
+    <li>If spectator, stop following -- <var class="funcname">StopFollowing()</var>.
+     <ol>
+     <li>Clears spectator-following fields.</li>
+     </ol>     </li>    <li>Move to intermission location (set by spawn variable <tt class="constname">info_player_intermission</tt>).</li>
+    <li>Set movement type to <tt class="constname">PM_INTERMISSION</tt>.</li>
+    <li>Clear powerups, attributes, flags, sounds, events, etc.</li>
+    </ol>    </li>   <li>Otherwise, trip triggers at spawn point, then select highest player weapon available (which may not be machine gun) -- <var class="funcname">G_UseTargets()</var>.</li>
+   <li>Drop player to the floor by gravity -- <var class="funcname">ClientThink()</var>.  No loop as <q>needs to respawn</q> has been cleared by now.</li>
+   </ol>   </li>  </ol>  </li> <li>Add teleportation effect at spawn point -- <var class="funcname">G_TempEntity()</var>.</li>
+ <li>Link client into game (again, just to be sure).</li>
+ <li>Run end-of-frame stuff -- ClientEndFrame.</li>
+ <li>Entity state stuff -- <var class="funcname">BG_PlayerStateToEntityState()</var>.</li>
+ </ol> </li><li>Run once-per-second client actions -- <var class="funcname">ClientTimerActions()</var>.
+ <ol>
+ <li>Check if one-second period has passed.</li>
+ <li>Increase health due to regeneration powerup, rate is influenced by any excessive health.</li>
+ <li>Tick down excessive health (health greater than <var class="varname">maxHealth</var>) if no regeneration powerup.</li>
+ <li>Tick down excessive armor (armor greater than <var class="varname">maxArmor</var>).</li>
+ <li>Tick up ammo due to ammo-regen powerup (Team Arena only).</li>
+ </ol> </li></ol>
+<h4><a name="FireWeapon">FireWeapon(*entity)</a></h4>
+<p>
+<ol>
+<li>Check for quad damage powerup.</li>
+<li>Accumulate accuracy statistics.</li>
+<li>Determine firing direction.</li>
+<li>Fire according to weapon in use:
+ <ul>
+ <li>gauntlet -- <var class="funcname">Weapon_Gauntlet()</var>
+  <ol>
+  <li>(Non-operation.  Nothing.  Nada.  Zilch.)</li>
+  <li>(Checking for gauntlet hit is done in <var class="funcname">CheckGauntletHit()</var>).</li>
+  </ol>  </li> <li>lightning gun -- <var class="funcname">Weapon_LightningFire()</var>
+  <ol>
+  <li>Check for anything in front for 768 units (<tt class="constname">LIGHTNING_RANGE</tt>)</li>
+  <li>Bounce off any invulerability spheres (Team Arena only)</li>
+  <li>Apply damage to victim.</li>
+  <li>Cause visual and audio effects.</li>
+  <li>Record accuracy stats.</li>
+  </ol>  </li> <li>shotgun -- <var class="funcname">weapon_supershotgun_fire()</var>
+  <ol>
+  <li>Seed RNG for shotgun pattern.</li>
+  <li>Fire shotgun pellets -- <var class="funcname">ShotgunPattern()</var>.
+   <ol>
+   <li>For 11 (<tt class="constname">DEFAULT_SHOTGUN_COUNT</tt>) pellets:
+    <ol>
+    <li>Fudge local up and right by random positive or negative values.</li>
+    <li>Check for damage dealt by pellet.</li>
+    <li>Record accuracy stats.</li>
+    </ol>    </li>   </ol>   </li>  </ol>  </li> <li>machine gun -- <var class="funcname">Bullet_Fire()</var>
+  <ol>
+  <li>Fudge the aim direction by a bit (for random spread).</li>
+  <li>Search along fudged direction for a victim (or wall).</li>
+  <li>Bounce off invulnerability spheres (Team Arena only).</li>
+  <li>Cause bullet-hit effect.</li>
+  <li>Deal damage -- <var class="funcname">G_Damage()</var>.</li>
+  </ol>  </li> <li>grenade launcher -- <var class="funcname">weapon_grenadelauncher_fire()</var>
+  <ol>
+  <li>Fudge the aim direction upwards a little bit for loft.</li>
+  <li>Create and launch a grenade -- <var class="funcname">fire_grenade()</var>
+   <ol>
+   <li>Allocate a game entity -- <var class="funcname">G_Spawn()</var>.</li>
+   <li>Set fields for a grenade entity.</li>
+   <li>Snap velocity vectors (components rounded to integers).</li>
+   </ol>   </li>  <li>Increase grenade damage by any quad damage.</li>
+  </ol>  </li> <li>rocket launcher -- <var class="funcname">Weapon_RocketLauncher_fire()</var>
+  <ol>
+  <li>Create and launch a rocket -- <var class="funcname">fire_rocket()</var>
+   <ol>
+   <li>Allocate a game entity -- <var class="funcname">G_Spawn()</var>.</li>
+   <li>Set fields for a rocket entity.</li>
+   <li>Snap velocity vectors (components rounded to integers).</li>
+   </ol>   </li>  <li>Increase rocket damage by any quad damage.</li>
+  </ol>  </li> <li>plasma gun -- <var class="funcname">Weapon_PlasmaGun_Fire()</var>
+  <ol>
+  <li>Create and launch a plasma round -- <var class="funcname">fire_plasma()</var>
+   <ol>
+   <li>Allocate a game entity -- <var class="funcname">G_Spawn()</var>.</li>
+   <li>Set fields for a plasma entity.</li>
+   <li>Snap velocity vectors (components rounded to integers).</li>
+   </ol>   </li>  <li>Increase plasma damage by any quad damage.</li>
+  </ol>  </li> <li>railgun -- <var class="funcname">weapon_railgun_fire()</var>
+  <ol>
+  <li>Railgun range is 8192 units.</li>
+  <li>Bounce off invulnerability (Team Arena only).</li>
+  <li>Record accuracy stats.</li>
+  <li>Damage up to 4 (<tt class="constname">MAX_RAIL_HITS</tt>) players, passing through three.</li>
+  <li>Rail slug stops at walls or other impenetrable obstacles.</li>
+  <li>Create rail beam/trail effect.</li>
+  <li>Fudge locations a bit for visual effect (so rail appears to start from gun location)</li>
+  <li>Check for <q>Impressive</q> (two consecutive railgun hits without a miss) reward.</li>
+  </ol>  </li> <li>BFG10K -- <var class="funcname">BFG_Fire()</var>
+  <ol>
+  <li>Create and launch a BFG round -- <var class="funcname">fire_bfg()</var>
+   <ol>
+   <li>Allocate a game entity -- <var class="funcname">G_Spawn()</var>.</li>
+   <li>Set fields for a BFG entity.</li>
+   <li>Snap velocity vectors (components rounded to integers).</li>
+   </ol>   </li>  <li>Increase BFG damage by any quad damage.</li>
+  </ol>  </li> <li>grappling hook -- <var class="funcname">Weapon_GrapplingHook_Fire()</var></li>
+ <li>nailgun (Team Arena only) -- <var class="funcname">Weapon_Nailgun_Fire()</var></li>
+ <li>proximity mine launcher (Team Arena only) -- <var class="funcname">weapon_proxlauncher_fire()</var></li>
+ <li>chaingun (Team Arena only) -- <var class="funcname">Bullet_Fire()</var></li>
+ </ul> </li></ol>
+<p>
+TODO: <var class="funcname">Pmove()</var>
+
+
+
+<h3><a name="vmMain.GAME_CLIENT_USERINFO_CHANGED">vmMain(GAME_CLIENT_USERINFO_CHANGED, clientNum)</a></h3>
+<p>
+When a client user's info has changed (name, player model, handicap, etc.), the Q3 server is notified and reacts with a call to <var class="funcname">vmMain()</var> with major function <tt class="constname">GAME_CLIENT_USERINFO_CHANGED</tt>, with one argument:
+<ol>
+<li><var class="varname">clientNum</var> - the client number of the client that changed its info.</li>
+</ol><p>
+Immediate branch to <var class="funcname">ClientUserinfoChanged()</var>.
+
+
+<h4><a name="ClientUserinfoChanged">ClientUserinfoChanged(clientNum)</a></h4>
+<p>
+<ol>
+<li>Note client number and client object/entity.</li>
+<li>Retrieve client userinfo -- <var class="funcname">trap_GetUserinfo()</var>.</li>
+<li>Check for invalid string -- <var class="funcname">Info_Validate()</var>.
+ <ol>
+ <li></li>
+ </ol> </li><li>Check if local client (key <var class="varname">ip</var>) -- <var class="funcname">Info_ValueForKey()</var>.
+ <ol>
+ <li></li>
+ </ol> </li><li>Check item prediction (key <q><tt class="keyname">cg_predictItems</tt></q>).</li>
+<li>Set name (key <q><tt class="keyname">name</tt></q>).</li>
+<li>Announce if in-game name change.</li>
+<li>Set max health according to handicap (key <q><tt class="keyname">handicap</tt></q>).</li>
+<li>Set player model (keys <q><tt class="keyname">model</tt></q> and <q><tt class="keyname">hmodel</tt></q>, or <q><tt class="keyname">team_model</tt></q> and <q><tt class="keyname">team_hmodel</tt></q>).</li>
+<li>If a bot, join team a short time later.</li>
+<li>Otherwise just set team (or spec).</li>
+<li>Set model skin according to team.</li>
+<li>Determine if client wants teamoverlay info (key <q><tt class="keyname">teamoverlay</tt></q>).</li>
+<li>Set team task (key <q><tt class="keyname">teamtask</tt></q>) and leader.</li>
+<li>Set colors (keys <q><tt class="keyname">color</tt></q>, <q><tt class="keyname">g_redteam</tt></q>, <q><tt class="keyname">g_blueteam</tt></q>).</li>
+<li>Construct a ConfigString from a subset of userinfo, to broadcast to all clients.</li>
+</ol>
+
+<h3><a name="vmMain.GAME_CLIENT_DISCONNECT">vmMain(GAME_CLIENT_DISCONNECT, clientNum)</a></h3>
+<p>
+When client disconnects (voluntary <q><kbd class="command">disconnect</kbd></q>, kicked, dropped, etc.).
+Arguments:
+
+<ol>
+<li><var class="varname">clientNum</var> - the client number of the client just disconnected.</li>
+</ol>
+<p>
+Immediate branch to <var class="funcname">ClientDisconnect()</var>.
+
+
+<h4><a name="ClientDisconnect">ClientDisconnect(clientNum)</a></h4>
+<p>
+<ol>
+<li>Check if kicking a still-unspawned bot -- <var class="funcname">G_RemoveQueuedBotBegin()</var>.
+ <ol>
+ <li></li>
+ </ol> </li><li>If any spectator is following this client, stop their following -- <var class="funcname">StopFollowing()</var>.</li>
+<li>Create teleport-out effect.</li>
+<li>Drop any powerups client had -- <var class="funcname">TossClientItems()</var>.
+ <ol>
+ <li></li>
+ </ol> </li><li>If a tournament game, award remaining player with a win.</li>
+<li>Unlink the client -- <var class="funcname">trap_UnlinkEntity()</var>.</li>
+<li>Mark ex-client as being disconnected and mark its slot as unused.</li>
+<li>Clear associated ConfigString.</li>
+<li>Recalculate ranks -- <var class="funcname">CalculateRanks()</var>.</li>
+<li>If a bot AI, shutdown AI -- <var class="funcname">BotAIShutdownClient()</var>.
+ <ol>
+ <li></li>
+ </ol> </li></ol>
+
+<h3><a name="vmMain.GAME_CLIENT_BEGIN">vmMain(GAME_CLIENT_BEGIN, clientNum)</a></h3>
+<p>
+When client is ready to play.
+This occurs when client has finished connecting and loading, or has switched teams, or has continued in from the previous map.
+Does not occur on respawns (why should the Q3 engine know about respawns+teleport?  The game engine does, though).
+Arguments:
+<ol>
+<li><var class="varname">clientNum</var> - client number.</li>
+</ol>
+<p>
+Immediate branch to <var class="funcname">ClientBegin()</var>.
+
+
+<h4><a name="ClientBegin">ClientBegin(clientNum)</a></h4>
+<p>
+<ol>
+<li>Note client number and client entity/record.</li>
+<li>Unlink client entity -- <var class="funcname">trap_UnlinkEntity()</var>.</li>
+<li>Initialize client game entity -- <var class="funcname">G_InitGentity()</var>.
+ <ol>
+ <li>Clear and initialize some critical game entity fields.</li>
+ </ol> </li><li>Initialize client fields.</li>
+<li>Select a spawn point -- <var class="funcname">ClientSpawn()</var>.</li>
+<li>Announce the player joining the game, if not tournament mode.</li>
+<li>Recalculate ranks -- <var class="funcname">CalculateRanks()</var>.</li>
+</ol>
+
+<h3><a name="vmMain.GAME_CLIENT_COMMAND">vmMain(GAME_CLIENT_COMMAND, clientNum)</a></h3>
+<p>
+When client sends a command to the server.
+This usually occurs when the client-end doesn't recognize a console command from the user, and so passes off the command to the server in hopes the server understands it.
+Arguments:
+<ol>
+<li><var class="varname">clientNum</var> - client number</li>
+</ol>
+<p>
+Immediate branch to <var class="funcname">ClientCommand()</var>.
+
+
+<h4><a name="ClientCommand">ClientCommand(clientNum)</a></h4>
+<p>
+<ol>
+<li>Check client validity.</li>
+<li>Retrieve command name from string -- <var class="funcname">trap_Argv()</var>.</li>
+<li>Check against known command names:
+ <ul>
+ <li><q><kbd class="command">say</kbd></q></li>
+ <li><q><kbd class="command">say_team</kbd></q></li>
+ <li><q><kbd class="command">tell</kbd></q></li>
+ <li><q><kbd class="command">vsay</kbd></q></li>
+ <li><q><kbd class="command">vsay_team</kbd></q></li>
+ <li><q><kbd class="command">vtell</kbd></q></li>
+ <li><q><kbd class="command">vosay</kbd></q></li>
+ <li><q><kbd class="command">vosay_team</kbd></q></li>
+ <li><q><kbd class="command">votell</kbd></q></li>
+ <li><q><kbd class="command">vtaunt</kbd></q></li>
+ <li><q><kbd class="command">score</kbd></q></li>
+ <li><em>(At intermission, the following commands are ignored, and instead are transmitted as global chat)</em></li>
+ <li><q><kbd class="command">give</kbd></q></li>
+ <li><q><kbd class="command">god</kbd></q></li>
+ <li><q><kbd class="command">notarget</kbd></q></li>
+ <li><q><kbd class="command">noclip</kbd></q></li>
+ <li><q><kbd class="command">kill</kbd></q></li>
+ <li><q><kbd class="command">teamtask</kbd></q></li>
+ <li><q><kbd class="command">levelshot</kbd></q></li>
+ <li><q><kbd class="command">follow</kbd></q></li>
+ <li><q><kbd class="command">follownext</kbd></q></li>
+ <li><q><kbd class="command">followprev</kbd></q></li>
+ <li><q><kbd class="command">team</kbd></q></li>
+ <li><q><kbd class="command">where</kbd></q></li>
+ <li><q><kbd class="command">callvote</kbd></q></li>
+ <li><q><kbd class="command">vote</kbd></q></li>
+ <li><q><kbd class="command">callteamvote</kbd></q></li>
+ <li><q><kbd class="command">teamvote</kbd></q></li>
+ <li><q><kbd class="command">gc</kbd></q></li>
+ <li><q><kbd class="command">setviewpos</kbd></q></li>
+ <li><q><kbd class="command">stats</kbd></q></li>
+ </ul> </li><li>Unrecognized commands return an error message to the originating client.</li>
+</ol>
+
+<h3><a name="vmMain.GAME_RUN_FRAME">vmMain(GAME_RUN_FRAME, levelTime)</a></h3>
+<p>
+Called by Q3 each server frame (period determined by cvar <q><span class="cvarname">sv_fps</span></q>, default value of 20 fps (or 50 ms/frame)) to advance all non-player objects.
+Arguments:
+<ol>
+<li><var class="varname">levelTime</var> - the elapsed time on the level as reported by Q3 engine (this is where <var class="varname">level.time</var> comes from!).</li>
+</ol>
+<p>
+Immediate branch to <var class="funcname">G_RunFrame()</var>.
+
+
+<h4><a name="G_RunFrame">G_RunFrame(levelTime)</a></h4>
+<p>
+<ol>
+<li>Check if waiting for level to restart.</li>
+<li>Remember previous levelTime.</li>
+<li>Store current levelTime.</li>
+<li>Calculate the time difference.</li>
+<li>Update all cvar changes -- <var class="funcname">G_UpdateCvars()</var>.</li>
+<li>Record the current timestamp (not levelTime) -- <var class="funcname">trap_Milliseconds()</var>.</li>
+<li>For all allocated game entities:
+ <ol>
+ <li>Ignore unused entity.</li>
+ <li>Clear out old events.</li>
+ <li>Free entity slot if no longer needed -- <var class="funcname">G_FreeEntity()</var>.</li>
+ <li>Unlink entity if needed -- <var class="funcname">trap_UnlinkEntity()</var>.</li>
+ <li>Ignore temporary entity (they don't think).</li>
+ <li>Ignore unlinked entity.</li>
+ <li>If a missile type, run missile think -- <var class="funcname">G_RunMissile()</var>.
+  <ol>
+  <li>Find missile's current position -- <var class="funcname">BG_EvaluateTrajectory()</var>.</li>
+  <li>Do checks for what the missile will or will not pass through.</li>
+  <li>See if missile passed through anything noteworthy -- <var class="funcname">trap_Trace()</var>.</li>
+  <li>Check if missile is stuck in anything, otherwise just keep moving forward.</li>
+  <li>Link missile into the game (<b class="xxx">XXX</b>: when was it unlinked?) -- <var class="funcname">trap_LinkEntity()</var>.</li>
+  <li>If missile collided with something:
+   <ol>
+   <li>Just free up the entity if hit a <tt class="constname">SURF_NOIMPACT</tt> surface (such as sky or a black hole).</li>
+   <li>Otherwise do missile impact stuff -- <var class="funcname">G_MissileImpact()</var>.
+    <ol>
+    <li>Check for bouncing -- <var class="funcname">G_BounceMissile()</var>
+     <ol>
+     <li>(vector math for ricochet/bounce effect)</li>
+     </ol>     </li>    <li>Deal impact damage, if applicable.</li>
+    <li>Stick proximity mine to victim (Team Arena only)</li>
+    <li>Latch grappling hook and start pulling, if applicable.</li>
+    <li>Create any explosion effect -- <var class="funcname">G_AddEvent()</var>.</li>
+    <li>Snap vectors.</li>
+    <li>Deal any splash damage -- <var class="funcname">G_RadiusDamage()</var>.
+     <ol>
+     <li>Sanity check on damage radius, create a damage bounding box.</li>
+     <li>Find entities within damage bounding box and save to array <var class="varname">entityList[</var>] -- <var class="funcname">trap_EntitiesInBox()</var>.</li>
+     <li>For all the entities in <var class="varname">entityList[]</var>:
+      <ol>
+      <li>Ignore if entity marked for ignore.</li>
+      <li>Ignore if entity cannot be damaged.</li>
+      <li>See if entity is actually within damage radius.</li>
+      <li>Get distance from explosion center to entity center.</li>
+      <li>Calculate damage based on this distance.</li>
+      <li>Deal damage and knockback, while recording accuracy stats.</li>
+      </ol>      </li>     </ol>     </li>    <li>Link missile into the world (<b class="xxx">XXX</b>: again?) -- <var class="funcname">trap_LinkEntity()</var>.</li>
+    </ol>    </li>   </ol>   </li>  <li>If missile hasn't exploded yet, run its think function -- <var class="funcname">G_RunThink()</var>.</li>
+  </ol>  </li> <li>If an item type that's bouncing, run item think -- <var class="funcname">G_RunItem()</var>.
+  <ol>
+  <li>Check if item is in free fall.</li>
+  <li>Check if item has <tt class="constname">stationary</tt> trajectory, if so then just run <var class="funcname">G_RunThink()</var> and return.</li>
+  <li>Get current position of item.</li>
+  <li>See if it hit/landed on anything.</li>
+  <li>Run think function -- <var class="funcname">G_RunThink()</var>.</li>
+  <li>If in a <tt class="constname">nodrop</tt> brush, remove entity from game.</li>
+  <li>Cause item to bounce -- <var class="funcname">G_BounceItem()</var>.
+   <ol>
+   <li>(lots of vector math)</li>
+   </ol>   </li>  </ol>  </li> <li>If a mover, run mover think -- <var class="funcname">G_RunMover()</var>.
+  <ol>
+  <li>Check if a team slave, return if so (team captain handles all activities).</li>
+  <li>If not stationary, run mover -- <var class="funcname">G_MoverTeam()</var>.
+   <ol>
+   <li>Make sure all team members (other movers in a chain) are able to move -- <var class="funcname">G_MoverPush()</var>.
+    <ol>
+    <li>Establish boundaries of mover and entire movement area covered.</li>
+    <li>Unlink mover temporarily -- <var class="funcname">trap_UnlinkEntity()</var>.</li>
+    <li>Find entities within mover's movement area and store into list <var class="varname">listedEntities[]</var> -- <var class="funcname">trap_EntitiesInBox()</var>.</li>
+    <li>Move pusher to final position.</li>
+    <li>Link mover back into the game -- <var class="funcname">trap_LinkEntity()</var>.</li>
+    <li>For each entity in <var class="varname">listedEntities[]</var>:
+     <ol>
+     <li>Try pushing proxmine (Team Arena only).</li>
+     <li>Ignore entity if not an item nor a player.</li>
+     <li>Move entities standing on mover, and ensure it doesn't try to occupy the same space as the mover -- <var class="funcname">G_TestEntityPosition()</var>.
+      <ol>
+      <li></li>
+      </ol>      </li>     <li>Push entity -- <var class="funcname">G_TryPushingEntity()</var>.
+      <ol>
+      <li></li>
+      </ol>      </li>     <li>Any entites that bob (such as items) get killed if stuck inside a mover position (such as between doors), move on to next pushed object.</li>
+     <li>Otherwise move entities back, since this is an obstacle.</li>
+     </ol>     </li>    </ol>    </li>   <li>Restore old position(s) if any mover member can't move.</li>
+   <li>Run <var class="funcname">blocked()</var> function for any mover member that couldn't move -- <var class="funcname">part-&gt;blocked()</var>.</li>
+   <li>Otherwise calculate and set new positions.</li>
+   <li>If a mover member reachd one end of its movement, call its <var class="funcname">reached()</var> function -- <var class="funcname">part-&gt;reached()</var>;.</li>
+   </ol>   </li>  <li>Run entity-specific think function -- <var class="funcname">G_RunThunk()</var>.</li>
+  </ol>  </li> <li>If a client, run client think -- <var class="funcname">G_RunClient()</var>.
+  <ol>
+  <li>Check if a bot AI, return if so.</li>
+  <li>Record <var class="varname">levelTime</var></li>
+  <li>Call <var class="funcname">ClientThink_real()</var>.</li>
+  </ol>  </li> <li>Otherwise, just run think -- <var class="funcname">G_RunThink()</var>.
+  <ol>
+  <li>Check if there is any thinktime.</li>
+  <li>Check if <var class="varname">levelTime</var> exceeded thinktime, return if not.</li>
+  <li>Disable nextthink and run entity's think -- <var class="funcname">ent-&gt;think()</var>.</li>
+  </ol>  </li> </ol> </li><li>Record current timestamp -- <var class="funcname">trap_Milliseconds()</var>.</li>
+<li>(Time elapsed during run cycle can be calculated (but isn't)).</li>
+<li>Do final fixups on players -- <var class="funcname">ClientEndFrame()</var>.</li>
+<li>Check for tournament restart -- <var class="funcname">CheckTournament()</var>.
+ <ol>
+ <li></li>
+ </ol> </li><li>Check for end of level -- <var class="funcname">CheckExitRules()</var>.
+ <ol>
+ <li>If still intermission time, check that all non-bot clients are <tt class="constname">READY</tt> to leave intermission, return if not ready to exit level/map -- <var class="funcname">CheckIntermissionExit()</var>.</li>
+ <li>Check for queued intermission (???)
+  <ol>
+  <li>Ignore if queue time not yet exceeded.</li>
+  <li>Unqueue intermission.</li>
+  <li>Begin intermission -- <var class="funcname">BeginIntermission()</var>.
+   <ol>
+   <li>Return if intermission already in progress. </li>
+   <li>For tournament mode, adjust tournament scores -- <var class="funcname">AdjustTournamentScores()</var>.
+    <ol>
+    <li>Update number of wins or losses for the two competitors.</li>
+    </ol>    </li>   <li>Record the current <var class="varname">levelTime</var> as the intermission time.</li>
+   <li>Find the intermission location -- <var class="funcname">FindIntermissionPoint()</var>.</li>
+   <li>If single-player game:
+    <ol>
+    <li>Update tournament information -- <var class="funcname">UpdateTournamentInfo()</var>
+     <ol>
+     <li>Take note of (the only) player's record/slot/entity.</li>
+     <li>Calculate ranks -- <var class="funcname">CalculateRanks()</var>.</li>
+     <li>Record postgame data?</li>
+     <li>Calculate accuracy percentage.</li>
+     <li>Check for <q>Perfect</q> reward.</li>
+     <li>Record rewards information.</li>
+     </ol>     </li>    <li>show the victory podium -- <var class="funcname">SpawnModelsOnVictoryPads()</var>
+     <ol>
+     <li>Spawn the podium -- <var class="funcname">SpawnPodium()</var>.
+      <ol>
+      <li>Create podium entity.</li>
+      <li>Place podium in front of intermission view.</li>
+      </ol>      </li>     <li>Place the top three players in their appropriate places -- <var class="funcname">SpawnModelOnVictoryPad()</var>.
+      <ol>
+      <li>Copy entity properties of the player into a new game entity.</li>
+      <li>Set entity location relative to podium and intermission viewpoint.</li>
+      </ol>      </li>     </ol>     </li>    </ol>    </li>   <li>Move all clients to intermission point -- <var class="funcname">MoveClientToIntermission()</var></li>
+   <li>Send current scores to all clients -- <var class="funcname">SendScoreboardMessageToAllClients()</var>.
+    <ol>
+    <li>For each client:
+     <ol>
+     <li>Send scoreboard info -- <var class="funcname">DeathmatchScoreboardMessage()</var>
+      <ol>
+      <li>For all clients:
+       <ol>
+       <li>Construct string based on client number, frags, ping time, play time, score flags, powerups, rewards, and captures.</li>
+       </ol>       </li>      <li>Send this huge-ass string, along with blue team score and red team score, to client -- <var class="funcname">SendServerCommand()</var>.</li>
+      </ol>      </li>     </ol>     </li>    </ol>    </li>   </ol>   </li>  </ol>  </li> </ol> </li><li>Update team status -- <var class="funcname">CheckTeamStatus()</var>.
+ <ol>
+ <li>Check if time to do team location update.</li>
+ <li>For all clients:
+  <ol>
+  <li>Ignore clients still connecting.</li>
+  <li>Determine team.</li>
+  <li>Store team location information into client record.</li>
+  </ol>  </li> <li>For all clients (again):
+  <ol>
+  <li>Ignore clients still connecting.</li>
+  <li>Determine team.</li>
+  <li>Transmit team location information to client -- <var class="funcname">TeamplayInfoMessage()</var>.
+   <ol>
+   <li>Return if client has no (doesn't want?) teaminfo.</li>
+   <li>Extract top eight teammates on player's team.</li>
+   <li>Sort the eight teammates by client number.</li>
+   <li>For all clients or the first 32 (<tt class="constname">TEAM_MAXOVERLAY</tt>) (whichever is less):
+    <ol>
+    <li>Ignore if this client is not in use, or is not on the same team.</li>
+    <li>Store client's health and armor.</li>
+    <li>Construct a string based on the client's list location (cycle in this particular loop), location, health, armor, current weapon, and active powerup.</li>
+    <li>Truncate constructed string if too long (8192 bytes).</li>
+    </ol>    </li>   <li>Transmit the constructed string to the client -- <var class="funcname">trap_SendServerCommand()</var>.</li>
+   </ol>   </li>  </ol>  </li> </ol> </li><li>Check global votes -- <var class="funcname">CheckVote()</var>.
+ <ol>
+ <li>If vote string is to be executed and it's time to execute, execute the string as a command -- <var class="funcname">trap_SendConsoleCommand()</var>.</li>
+ <li>Return if no vote in progress.</li>
+ <li>Check if vote time expired, report vote having failed if so.</li>
+ <li>Otherwise check for votes:
+  <ol>
+  <li>If Yes has simple majority, report success and execute vote string within 3 seconds.</li>
+  <li>If No has simple majority, report failure.</li>
+  <li>Otherwise keep waiting for a majority one way or another.</li>
+  </ol>  </li> <li>Update ConfigString <span class="configstring">CS_VOTE_TIME</span> accordingly.</li>
+ </ol> </li><li>Check team votes -- <var class="funcname">CheckTeamVote()</var>.
+ <ol>
+ <li>Determine which team to check (blue or red).</li>
+ <li>Return if no vote is in progress.</li>
+ <li>If voting time limit is exceeded, report failure to... everyone(!).</li>
+ <li>Otherwise:
+  <ol>
+  <li>Check if Yes votes has simple majority.
+   <ol>
+   <li>If the vote was to change leader, set new team leader -- <var class="funcname">SetLeader()</var>.</li>
+   <li>Otherwise execute vote string as a command -- <var class="funcname">trap_SendConsoleCommand()</var>.</li>
+   </ol>   </li>  <li>Check if No votes has simple majority; cause vote to fail if so.</li>
+  <li>Otherwise keep waiting for a majority vote.</li>
+  </ol>  </li> <li>Set CS_TEAMVOTE_TIME (+1 for blue) accordingly.</li>
+ </ol> </li><li>Check on changes in cvars -- <var class="funcname">CheckCvars()</var>.
+ <ol>
+ <li>Do nothing (return) if cvar <q><span class="cvarname">g_password</span></q> has not changed.</li>
+ <li>If cvar <q><span class="cvarname">g_password</span></q> is set, and is not <q>none</q>, set <q><span class="cvarname">g_needpass</span></q> to 1.</li>
+ <li>Otherwise, set cvar <q><span class="cvarname">g_needpass</span></q> to 0.</li>
+ </ol> </li><li>Dump entities list if cvar <q><span class="cvarname">g_listEntity</span></q> is non-zero.</li>
+</ol>
+
+<h3><a name="vmMain.GAME_CONSOLE_COMMAND">vmMain(GAME_CONSOLE_COMMAND)</a></h3>
+<p>
+When a console command is entered directly to the server from the server console (admin commands).
+No arguments.
+Immediate branch to <var class="funcname">ConsoleCommand()</var>.
+
+
+<h4><a name="ConsoleCommand">ConsoleCommand()</a></h4>
+<p>
+<ol>
+<li>Retrieve command name -- <var class="funcname">trap_Argv()</var>.</li>
+<li>Check command:
+ <ol>
+ <li><q><kbd class="command">entitylist</kbd></q></li>
+ <li><q><kbd class="command">forceteam</kbd></q></li>
+ <li><q><kbd class="command">game_memory</kbd></q></li>
+ <li><q><kbd class="command">addbot</kbd></q></li>
+ <li><q><kbd class="command">botlist</kbd></q></li>
+ <li><q><kbd class="command">abort_podium</kbd></q></li>
+ <li><q><kbd class="command">addip</kbd></q></li>
+ <li><q><kbd class="command">removeip</kbd></q></li>
+ <li><q><kbd class="command">listip</kbd></q></li>
+ </ol> </li><li>If command is not found and server is running in dedicated mode (cvar <q><span class="cvarname">dedicated</span></q> is 1 or 2), repeat the command line as global chat text from console.</li>
+</ol>
+
+<!--
+SECT1(vmMain.GAME_FOO,[*vmMain(GAME_FOO, ...)*])
+_P([*
+When Q3 wants to ... Q3 calls vmMain with major function CONSTNAME(GAME_FOO), and ... arguments:
+LIST_ORDERED([*
+LI([*...*])
+*])dnl LIST_ORDERED
+*])dnl _P
+
+_P([*
+In FUNCNAME(vmMain()), the code immediately branches to ... when vmMain recognizes CONSTNAME(GAME_FOO)
+*])
+
+SECT1(G_Foo,[*G_Foo(...)*])
+_P([*
+...
+*])
+-->
+
+<hr id="footer" width="42%" align="left">
+<p>
+Created 2002.08.26 <br>
+Updated 2002.09.16 - re-wordings suggested by members of <a href="http://www.quake3world.com/cgi-bin/forumdisplay.cgi?action=topics&amp;forum=Modifications+Programming&amp;number=4">Quake 3 World Modifications Programming Forum (MPF)</a>. <br>
+Updated 2003.11.10 - corrections sent in by cyrri. <br>
+Updated 2011.07.11 - change of contact e-mail. <br>
+<address>
+PhaethonH
+&lt; PhaethonH@gmail.com &gt;
+</address>
+</BODY>
+</HTML>

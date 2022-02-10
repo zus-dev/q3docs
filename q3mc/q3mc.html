@@ -1,0 +1,56 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<HTML>
+<HEAD>
+<META http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<TITLE>Quake III: Arena, baseq3 mod commentary</TITLE>
+</HEAD>
+<BODY>
+<P>
+Canonical URL:
+<A HREF="http://www.linux.ucla.edu/~phaethon/q3mc/q3mc.html">http://www.linux.ucla.edu/~phaethon/q3mc/q3mc.html</A> <BR>
+Mirror 1:
+<A HREF="http://www.icculus.org/~phaethon/q3mc/q3mc.html">http://www.icculus.org/~phaethon/q3mc/q3mc.html</A>
+<H2>Baseq3 source commentary</H2>
+<P>
+Canonical mirrors:<BR>
+http://www.linux.ucla.edu/~phaethon/q3mc<BR>
+http://www.icculus.org/~phaethon/q3mc<BR>
+<P>
+Project start 2002, Aug 11.
+
+<P>
+This is a project that I had thought of starting for many months.
+My many struggles with my own Q3 mod had me frequently wishing for some plain-language description of the workings of Q3A.
+Already I had written a document describing a large part of the <A HREF="../q3tamenu/q3tamenu.html">Q3TA menu system</A>, while trying to create custom HUDs for the Q3 mod Weapons Factory Arena.
+In some ways, starting on a commentary of the Q3A mod source (baseq3) while working on my own mod seems fitting.
+
+<HR>
+
+<P>
+Current content:
+<UL>
+<LI><A HREF="outline1.html">outline1.html</A> - (GAME) Outline of an execution trace of a q3 mod (baseq3) server-side.
+Not very complete, but may prove to be a source of useful bits for new modders.
+<LI><A HREF="immutable1.html">immutable1.html</A> - (GAME) Description and commentary on the various structs in q_shared.h that cannot be reasonably altered.
+<LI><A HREF="maingame1.html">maingame1.html</A> - (GAME) The main game structures server-side.
+<LI><A HREF="outline2.html">outline2.html</A> - (CGAME) Outline of an execution trace of a q3 mod (baseq3) client-side.
+<LI><A HREF="q3vm_specs.html">q3vm_specs.html</A> - Specifications of the Q3VM.
+<LI><A HREF="terminology.html">terminology.html</A> - Points out distinction among some of the terms I use in these docs.
+</UL>
+
+<P>
+Planned for future:
+<UL>
+<LI>Description of BG (Both Games) structs (bg_*.h)
+<LI>Description of spawn functions (g_spawn.c)
+<LI>Description of think functions (g_mover.c in particular)
+</UL>
+
+<hr width="42%" align="left">
+<p>
+<address>
+PhaethonH (phaethon , linux . ucla . edu)
+</address>
+
+</BODY>
+</HTML>

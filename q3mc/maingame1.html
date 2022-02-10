@@ -1,0 +1,996 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.or
+g/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<title>Main game structs</title>
+</head>
+<body>
+<h1>Main game structs</h1>
+
+<h2>Synopsis</h2><p>
+Description of gentity_t and gclient_t, the game module structs for game entities and game clients.
+</p>
+
+
+<h3><a name="template">Template</a></h3>
+<p>
+blurb
+
+
+<p>
+<hr><pre>
+/* paste source text here */
+</pre><hr>
+<dl>
+<dt><a name="template.field">field</a></dt><dd>description</dd>
+</dl>
+
+
+<h3><a name="gentity_t">struct gentity_s</a></h3>
+<p>
+This struct describes the properties of an &quot;entity&quot; in the game module.
+An entity may also be known as a &quot;game object&quot; in other contexts.
+
+
+<p>
+The Q3 engine knows nothing about the contents of a gentity_t, though it knows how large the struct is, via <var>trap_LocateGameData()</var>.
+The fields are specific to the game module, and are utilized solely by the code in the game module.
+The game module may still copy values into the members that the Q3 engine recognizes.
+
+
+<p>
+The trap <var>trap_LocateGameData</var> notifies the Q3 engine of the location of the array of game entities.
+The Q3 engine requires the beginning of each game entity struct to be a specific form, but the rest is left to the game module.
+
+
+<p>
+<hr><pre>
+typedef struct gentity_s gentity_t;
+
+struct gentity_s {
+    entityState_t   <a href="#gentity_t.s">s</a>;              // communicated by server to clients
+    entityShared_t  <a href="#gentity_t.r">r</a>;              // shared by both the server system and game
+
+    // DO NOT MODIFY ANYTHING ABOVE THIS, THE SERVER
+    // EXPECTS THE FIELDS IN THAT ORDER!
+    //================================
+
+    <a href="#gclient_t">struct gclient_s</a>    *<a href="#gentity_t.client">client</a>;            // NULL if not a client
+
+    qboolean    <a href="#gentity_t.inuse">inuse</a>;
+
+    char        *<a href="#gentity_t.classname">classname</a>;         // set in QuakeEd
+    int         <a href="#gentity_t.spawnflags">spawnflags</a>;         // set in QuakeEd
+
+    qboolean    <a href="#gentity_t.neverFree">neverFree</a>;          // if true, FreeEntity will only unlink
+                                    // bodyque uses this
+
+    int         <a href="#gentity_t.flags">flags</a>;              // FL_* variables
+
+    char        *<a href="#gentity_t.model">model</a>;
+    char        *<a href="#gentity_t.model2">model2</a>;
+    int         <a href="#gentity_t.freetime">freetime</a>;           // level.time when the object was freed
+
+    int         <a href="#gentity_t.eventTime">eventTime</a>;          // events will be cleared EVENT_VALID_MSEC after set
+    qboolean    <a href="#gentity_t.freeAfterEvent">freeAfterEvent</a>;
+    qboolean    <a href="#gentity_t.unlinkAfterEvent">unlinkAfterEvent</a>;
+
+    qboolean    <a href="#gentity_t.physicsObject">physicsObject</a>;      // if true, it can be pushed by movers and fall off edges
+                                    // all game items are physicsObjects,
+    float       <a href="#gentity_t.physicsBounce">physicsBounce</a>;      // 1.0 = continuous bounce, 0.0 = no bounce
+    int         <a href="#gentity_t.clipmask">clipmask</a>;           // brushes with this content value will be collided against
+                                    // when moving.  items and corpses do not collide against
+                                    // players, for instance
+
+    // movers
+    moverState_t <a href="#gentity_t.moverState">moverState</a>;
+    int         <a href="#gentity_t.soundPos1">soundPos1</a>;
+    int         <a href="#gentity_t.sound1to2">sound1to2</a>;
+    int         <a href="#gentity_t.sound2to1">sound2to1</a>;
+    int         <a href="#gentity_t.soundPos2">soundPos2</a>;
+    int         <a href="#gentity_t.soundLoop">soundLoop</a>;
+    <a href="#gentity_t">gentity_t</a>   *<a href="#gentity_t.parent">parent</a>;
+    <a href="#gentity_t">gentity_t</a>   *<a href="#gentity_t.nextTrain">nextTrain</a>;
+    <a href="#gentity_t">gentity_t</a>   *<a href="#gentity_t.prevTrain">prevTrain</a>;
+    vec3_t      <a href="#gentity_t.pos1">pos1</a>, <a href="#gentity_t.pos2">pos2</a>;
+
+    char        *<a href="#gentity_t.message">message</a>;
+
+    int         <a href="#gentity_t.timestamp">timestamp</a>;      // body queue sinking, etc
+
+    float       <a href="#gentity_t.angle">angle</a>;          // set in editor, -1 = up, -2 = down
+    char        *<a href="#gentity_t.target">target</a>;
+    char        *<a href="#gentity_t.targetname">targetname</a>;
+    char        *<a href="#gentity_t.team">team</a>;
+    char        *<a href="#gentity_t.targetShaderName">targetShaderName</a>;
+    char        *<a href="#gentity_t.targetShaderNewName">targetShaderNewName</a>;
+    gentity_t   *<a href="#gentity_t.target_ent">target_ent</a>;
+
+    float       <a href="#gentity_t.speed">speed</a>;
+    vec3_t      <a href="#gentity_t.movedir">movedir</a>;
+
+    int         <a href="#gentity_t.nextthink">nextthink</a>;
+    void        (*<a href="#gentity_t.think">think</a>)(gentity_t *self);
+    void        (*<a href="#gentity_t.reached">reached</a>)(gentity_t *self);    // movers call this when hitting endpoint
+    void        (*<a href="#gentity_t.blocked">blocked</a>)(gentity_t *self, gentity_t *other);
+    void        (*<a href="#gentity_t.touch">touch</a>)(gentity_t *self, gentity_t *other, trace_t *trace);
+    void        (*<a href="#gentity_t.use">use</a>)(gentity_t *self, gentity_t *other, gentity_t *activator);
+    void        (*<a href="#gentity_t.pain">pain</a>)(gentity_t *self, gentity_t *attacker, int damage);
+    void        (*<a href="#gentity_t.die">die</a>)(gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod);
+
+    int         <a href="#gentity_t.pain_debounce_time">pain_debounce_time</a>;
+    int         <a href="#gentity_t.fly_sound_debounce_time">fly_sound_debounce_time</a>;    // wind tunnel
+    int         <a href="#gentity_t.last_move_time">last_move_time</a>;
+
+    int         <a href="#gentity_t.health">health</a>;
+
+    qboolean    <a href="#gentity_t.takedamage">takedamage</a>;
+
+    int         <a href="#gentity_t.damage">damage</a>;
+    int         <a href="#gentity_t.splashDamage">splashDamage</a>;   // quad will increase this without increasing radius
+    int         <a href="#gentity_t.splashRadius">splashRadius</a>;
+    int         <a href="#gentity_t.methodOfDeath">methodOfDeath</a>;
+    int         <a href="#gentity_t.splashMethodOfDeath">splashMethodOfDeath</a>;
+
+    int         <a href="#gentity_t.count">count</a>;
+
+    <a href="#gentity_t">gentity_t</a>   *<a href="#gentity_t.chain">chain</a>;
+    <a href="#gentity_t">gentity_t</a>   *<a href="#gentity_t.enemy">enemy</a>;
+    <a href="#gentity_t">gentity_t</a>   *<a href="#gentity_t.activator">activator</a>;
+    <a href="#gentity_t">gentity_t</a>   *<a href="#gentity_t.teamchain">teamchain</a>;     // next entity in team
+    <a href="#gentity_t">gentity_t</a>   *<a href="#gentity_t.teammaster">teammaster</a>;    // master of the team
+
+#ifdef MISSIONPACK
+    int         kamikazeTime;
+    int         kamikazeShockTime;
+#endif
+
+    int         <a href="#gentity_t.watertype">watertype</a>;
+    int         <a href="#gentity_t.waterlevel">waterlevel</a>;
+
+    int         <a href="#gentity_t.noise_index">noise_index</a>;
+
+    // timing variables
+    float       <a href="#gentity_t.wait">wait</a>;
+    float       <a href="#gentity_t.random">random</a>;
+
+    gitem_t     *<a href="#gentity_t.item">item</a>;          // for bonus items
+};
+
+</pre><hr>
+<dl>
+<dt><a name="gentity_t.s">s</a></dt><dd>
+An instance of entityState_t.
+The Q3 engine expects this struct in this location.
+</dd>
+<dt><a name="gentity_t.r">r</a></dt><dd>
+An instance of entityShared_t.
+Q3 engine expects this struct in this location.
+Yes, entityShared_t contains yet another entityState_t.  Don't ask.
+</dd>
+<dt><a name="gentity_t.client">client</a></dt><dd>
+Pointer to a gclient_t, if this entity is a client (first 64 entities).
+<tt>NULL</tt> if not a client.
+</dd>
+<dt><a name="gentity_t.inuse">inuse</a></dt><dd>
+Boolean, whether this entity slot is used or not.
+</dd>
+<dt><a name="gentity_t.classname">classname</a></dt><dd>
+A name indicating this entity's type, or class, or category.
+</dd>
+<dt><a name="gentity_t.spawnflags">spawnflags</a></dt><dd>
+Spawn-time flags, for map entities (e.g. movers, triggers).
+</dd>
+<dt><a name="gentity_t.neverFree">neverFree</a></dt><dd>
+This entity slot should never be freed, but just unlinked instead.
+Used by body queue.
+</dd>
+<dt><a name="gentity_t.flags">flags</a></dt><dd>
+???
+</dd>
+<dt><a name="gentity_t.model">model</a></dt><dd>
+???
+</dd>
+<dt><a name="gentity_t.model2">model2</a></dt><dd>
+???
+</dd>
+<dt><a name="gentity_t.freetime">freetime</a></dt><dd>
+The <var>level.time</var> when this entity is freed.
+</dd>
+<dt><a name="gentity_t.eventTime">eventTime</a></dt><dd></dd>
+<dt><a name="gentity_t.freeAfterEvent">freeAfterEvent</a></dt><dd>
+Whether this entity is automatically freed after its event finishes.
+</dd>
+<dt><a name="gentity_t.unlinkAfterEvent">unlinkAfterEvent</a></dt><dd>
+Whether this entity is unlinked, but not freed, after its event finishes.
+</dd>
+<dt><a name="gentity_t.physicsObject">physicsObject</a></dt><dd>
+Whether this entity experiences physics-based motion (mainly fallling).
+</dd>
+<dt><a name="gentity_t.physicsBounce">physicsBounce</a></dt><dd>
+Bounce factor.
+Value of 1.0 is (an unrealistically) perfect reflection of kinetic energy.
+A value of 0.0 (also unrealistically) stops this entity fully -- for <tt>TR_LINEAR</tt> trajectory, the entity remains still midair; for <tt>TR_GRAVITY</tt> trajectory, the entity falls straight down.
+</dd>
+<dt><a name="gentity_t.clipmask">clipmask</a></dt><dd>
+Bitmask flags that indicate what brushes (XXX: correct word?)  against which this entity clips.
+</dd>
+<dt><a name="gentity_t.moverState">moverState</a></dt><dd>
+???
+</dd>
+<dt><a name="gentity_t.soundPos1">soundPos1</a></dt><dd>
+For movers, the sound to play when the mover reaches its first position.
+</dd>
+<dt><a name="gentity_t.sound1to2">sound1to2</a></dt><dd>
+For movers, the sound to play when the mover leaves its first position.
+</dd>
+<dt><a name="gentity_t.sound2to1">sound2to1</a></dt><dd>
+For movers, the sound to play when the mover leaves its second position.
+</dd>
+<dt><a name="gentity_t.soundPos2">soundPos2</a></dt><dd>
+For movers, the sound to play when the mover reaches its second position.
+</dd>
+<dt><a name="gentity_t.soundLoop">soundLoop</a></dt><dd>
+Sound the play in a loop while the mover is moving.
+</dd>
+<dt><a name="gentity_t.parent">parent</a></dt><dd>
+Pointer to the head of a linked list of entities.
+</dd>
+<dt><a name="gentity_t.nextTrain">nextTrain</a></dt><dd>
+For train entities, the next train location after the current one.
+</dd>
+<dt><a name="gentity_t.prevTrain">prevTrain</a></dt><dd>
+For train entities, the previous train location before the current one.
+</dd>
+<dt><a name="gentity_t.pos1">pos1</a></dt><dd>
+For movers, its first position.
+</dd>
+<dt><a name="gentity_t.pos2">pos2</a></dt><dd>
+For movers, its second position.
+</dd>
+<dt><a name="gentity_t.message">message</a></dt><dd>
+For target_print entities, the message to print.
+</dd>
+<dt><a name="gentity_t.timestamp">timestamp</a></dt><dd>
+For corpses (body queue), the <var>level.time</var> when the corpse was made.
+For players, the <var>level.time</var> of last hurting from a hurt brush.
+</dd>
+<dt><a name="gentity_t.angle">angle</a></dt><dd>
+Angle for map entities.
+This is the direction the entity faces on map spawn.
+Expressed as a rotation around around the z axis (XXX: what's 0? x?).
+</dd>
+<dt><a name="gentity_t.target">target</a></dt><dd>
+For map entities in general, name of some other entity to activate at an &quot;appropriate time&quot;.
+For portal entities, its camera object (the source of the portal's image).
+For camera entities, the direction to view? (otherwise aims towards portal?)
+For shooter entities, a target to actively target (moving aim as needed).
+For train entities, the next target (location) in the train.
+For give entities, a linked list of items to give to the activator?
+For laser entities, the entity to aim at (if any).
+For teleport entities, the teleport destination.
+For relay entities, the entity to activate.
+</dd>
+<dt><a name="gentity_t.targetname">targetname</a></dt><dd>
+For door entities, the remote button or trigger to open the door, otherwise acts in the usual Star Trek style (opens when a player is near).
+For plat entities (such as lifts), the remote button or trigger to activate the plat, otherwise activates if player is touching the plat.
+</dd>
+<dt><a name="gentity_t.team">team</a></dt><dd>
+Team name.
+Something about linking up all entities on a particular team.
+Movers that stay together are members of their own team?
+</dd>
+<dt><a name="gentity_t.targetShaderName">targetShaderName</a></dt><dd>
+XXX: Um... change shader on de/activate?
+</dd>
+<dt><a name="gentity_t.targetShaderNewName">targetShaderNewName</a></dt><dd>
+XXX: change shader on de/activate?
+</dd>
+<dt><a name="gentity_t.target_ent">target_ent</a></dt><dd>
+For proximity mines, pointer to the player entity it bounced off due to invulnerability.
+</dd>
+<dt><a name="gentity_t.speed">speed</a></dt><dd>
+For item entities, on respawn or pickup, zero for global sound, non-zero for local sound.
+For movers, the moving speed.
+For doors, the opening speed.
+For plats, the moving speed.
+For buttons, (XXX: ???).
+For trains, the new speed to use.
+For path corners, new speed to use.
+For rotation, rotation speed (left-handed geometry = positive number rotates clockwise when viewed from positive axis (&quot;overhead&quot; for z)).
+For bobbing, time in seconds to complete a full bob cycle.
+For pendulum, maximum swinging angle in degrees (degrees from vertical).
+For push targets, speed to push (as with jumppads).
+</dd>
+<dt><a name="gentity_t.movedir">movedir</a></dt><dd>
+For shooters, the direction to shoot if there's no target in particular.
+For proximity mines, (XXX: ???).
+For doors, the direction to move for opening/closing.
+For buttons, the direction to move for pressing/releasing.
+For lasers, the direction to shoot.
+For kamikaze explosions, (XXX: ???).
+</dd>
+<dt><a name="gentity_t.nextthink">nextthink</a></dt><dd>
+The <var>level.time</var> when this entity's <a href="#gentity_t.think">think</a> function runs again.
+</dd>
+<dt><a name="gentity_t.think">think</a></dt><dd>
+A function pointer to the entity's think function.
+This function is called when <var>level.time</var> exceeds <a href="#gentity_t.nextthink">nextthink</a>.
+This function may cause the entity to destroy itself (e.g. time-delay bombs), or induce basic AI (e.g. homing missiles).
+In the latter case, the think function may again set <a href="#gentity_t.nextthink">nextthink</a> to <var>level.time</var>+<tt>some_delay</tt> to re-run the think function shortly thereafter.
+One argument: the entity that is thinking (player, mover, shooter, button, etc.).
+</dd>
+<dt><a name="gentity_t.reached">reached</a></dt><dd>
+A function pointer to the entity's reach function.
+Used primarily for movers, this function runs when the mover reaches one of its destinations.
+One basic action is to send it right back to the other destination, although other actions are possible, such as killing someone randomly, activating a remote trigger, or jumping/teleporting back to another location (disappearing platforms).
+One argument: the entity that reached its destination (mover).
+</dd>
+<dt><a name="gentity_t.blocked">blocked</a></dt><dd>
+A function pointer to the entity's block function.
+Used primarily for movers, called when some other entity is blocking this entity.
+The usual action is to cause damage to the other entity and keep moving (squashing), or to bounce back to this entity's (the mover's) previous position.
+Two arguments: the entity being blocked (mover), the entity that caused the block (player, flag, item).
+</dd>
+<dt><a name="gentity_t.touch">touch</a></dt><dd>
+A function pointer to the entity's touch function.
+When this entity touches another entity, usually player-in-trigger (e.g. buttons, teleports).
+Three arguments: the entity being touched (teleport, door, button), the entity doing the touching (player, missile), the trace result that determined the entities are touching.
+</dd>
+<dt><a name="gentity_t.use">use</a></dt><dd>
+Function pointer, runs when entity is activated (such as player hitting button, or standing near door).
+Three arguments: the entity being used (item, button), ???, the entity that did the activating (player, target entity).
+</dd>
+<dt><a name="gentity_t.pain">pain</a></dt><dd>
+Function pointer, runs when entity receives damage.
+Three argument: entity receiving damage (player), the entity that dealt damage (player?), the damage amount.
+(XXX: can regen?)
+</dd>
+<dt><a name="gentity_t.die">die</a></dt><dd>
+Function pointer, runs when entity runs out of health.
+Five arguments: the entity that died (player, missile, door), the entity that delivered the damage (missile; NULL for hitscan?), the entity that attacked (player, shooter, world), damage amount, damage type.
+</dd>
+<dt><a name="gentity_t.pain_debounce_time">pain_debounce_time</a></dt><dd>
+The <var>level.time</var> when the pain sound event expires (new pain events do not generate a sound event during this time).
+</dd>
+<dt><a name="gentity_t.fly_sound_debounce_time">fly_sound_debounce_time</a></dt><dd>
+For push targets, the <var>level.time</var> when the &quot;push&quot; sound event expires (new push events do not generate a sound event during this time).
+</dd>
+<dt><a name="gentity_t.last_move_time">last_move_time</a></dt><dd>
+not used?
+</dd>
+<dt><a name="gentity_t.health">health</a></dt><dd>
+For players, their health level;
+this value is copied into playerState_t.stats[STAT_HEALTH].
+For most game entities, some health value.
+For doors, non-zero value means the door must be shot to open (otherwise can open by being near or being shot).
+For buttons, non-zero value means the button must be shot to activate (otherwise can activate by being run into or being shot).
+</dd>
+<dt><a name="gentity_t.takedamage">takedamage</a></dt><dd>
+Whether this entity can receive damage (e.g. god mode, missiles, shootable doors) and call <var>pain()</var>.
+</dd>
+<dt><a name="gentity_t.damage">damage</a></dt><dd>
+For missiles (grenades, rockets, plasma, BFG10K), amount of damage for a direct hit.
+</dd>
+<dt><a name="gentity_t.splashDamage">splashDamage</a></dt><dd>
+For missiles, amount of damage by splash damage.
+</dd>
+<dt><a name="gentity_t.splashRadius">splashRadius</a></dt><dd>
+Radius of splash damage.
+Entities beyond the radius are not damaged; entities within receive damage based on how close they are to the explosion.
+</dd>
+<dt><a name="gentity_t.methodOfDeath">methodOfDeath</a></dt><dd>
+A method-of-death (MOD) code number for a direct hit.
+This number indicates the type of missile, or, more specifically, the type of damage, from a direct hit.
+This number is used in obituaries to determine the obituary line (&quot;JoeRandom ate JaneQ's rocket&quot;).
+</dd>
+<dt><a name="gentity_t.splashMethodOfDeath">splashMethodOfDeath</a></dt><dd>
+MOD code number for splash damage.
+(&quot;JoeRandom almost dodged JaneQ's rocket&quot;)
+</dd>
+<dt><a name="gentity_t.count">count</a></dt><dd>
+For score targets, the score to give to the activator.
+For powerups, the amount of powerup time provided (uses item-><a href="#gentity_t.quantity">quantity</a> if zero).
+For ammo items, the amount of ammunition provided (uses item-><a href="#gentity_t.quantity">quantity</a> if zero).
+For armor items, the amount of armor provided (uses item-><a href="#gentity_t.quantity">quantity</a> if zero).
+For health items, the amount of health provided (uses item-><a href="#gentity_t.quantity">quantity</a> if zero).
+For weapon items, the amount of extra ammo provided (uses item-><a href="#gentity_t.quantity">quantity</a> if zero).
+For single player victory podium, the entity's rank (1, 2, or 3).
+For holdable portals, (XXX: ???).
+For doors, (XXX: ???).
+For proximity mines, whether it can currently attach to an player or not.
+For location entities, its location code number?
+For kamikaze explosion, the time counter?
+</dd>
+<dt><a name="gentity_t.chain">chain</a></dt><dd>
+???
+</dd>
+<dt><a name="gentity_t.enemy">enemy</a></dt><dd>
+???
+</dd>
+<dt><a name="gentity_t.activator">activator</a></dt><dd>
+For certain map entities, the entity (usually a player) that activated this entity.
+For kamikaze explosion, the entity (usually player) that... err... did the kamikaze.
+</dd>
+<dt><a name="gentity_t.teamchain">teamchain</a></dt><dd>
+Linked list of a team members.
+Movers that group together go in their own teams?
+</dd>
+<dt><a name="gentity_t.teammaster">teammaster</a></dt><dd>
+Pointer to the head of a team list.
+For movers, (XXX:...).
+</dd>
+<dt><a name="gentity_t.watertype">watertype</a></dt><dd>
+The liquid type the player is within (water or slime).
+</dd>
+<dt><a name="gentity_t.waterlevel">waterlevel</a></dt><dd>
+XXX: how much of the player's body is underwater?
+</dd>
+<dt><a name="gentity_t.noise_index">noise_index</a></dt><dd>
+For speaker entities, the sound index number (CONFIGSTRING) to play.
+</dd>
+<dt><a name="gentity_t.wait">wait</a></dt><dd>
+For movers, the amount of time (in seconds) to wait upon reaching a destination.
+For doors, amount of time (in seconds) to wait before closing again (or opening for start_open doors).
+For plats, amount of time (in seconds) to wait before returning to rest position?
+For buttons, amount of time (in seconds) to stay pressed before returning to rest position?
+For trains, amount of time (in seconds) to wait at the train before moving towards the next?
+For corners, amount of time (in seconds) to wait at the corner beofre moving to the next corner?
+For multiple triggers, (XXX: ???).
+For timer entities, amount of time (in seconds) to wait before triggering.
+For delay targets, amount of time (in seconds) to delay before firing targets.
+For speaker targets, amount of time (in seconds) to wait before auto-triggering.
+For items, amount of (in seconds) time before respawning.
+</dd>
+<dt><a name="gentity_t.random">random</a></dt><dd>
+For items, a random variance on <a href="#gentity_t.wait">wait</a>.
+For shooters, randomize the firing direction a little.
+For delay targets, random variance on <a href="#gentity_t.wait">wait</a>.
+For speaker targets, random variance on <a href="#gentity_t.wait">wait</a>.
+For multiple triggers, random variance on <a href="#gentity_t.wait">wait</a>.
+For timer entities, random variance on <a href="#gentity_t.wait">wait</a>.
+</dd>
+<dt><a name="gentity_t.item">item</a></dt><dd>
+For items (&quot;item instances&quot;), a pointer to an gitem_t item descriptor (&quot;item class&quot;).
+</dd>
+</dl>
+
+
+<h3><a name="gclient_t">struct gclient_s</a></h3>
+<p>
+This struct holds data particular to each client.
+A client is a (usually human) player, requiring a &quot;feedback&quot; mechanism (remote control).
+
+
+<p>
+<hr><pre>
+typedef struct gclient_s gclient_t;
+
+struct gclient_s {
+    // ps MUST be the first element, because the server expects it
+    playerState_t   <a href="#gclient_t.ps">ps</a>;             // communicated by server to clients
+
+    // the rest of the structure is private to game
+    <a href="#clientPersistant_t">clientPersistant_t</a>  <a href="#gclient_t.pers">pers</a>;
+    <a href="#clientSession_t">clientSession_t</a>     <a href="#gclient_t.sess">sess</a>;
+
+    qboolean    <a href="#gclient_t.readyToExit">readyToExit</a>;        // wishes to leave the intermission
+
+    qboolean    <a href="#gclient_t.noclip">noclip</a>;
+
+    int         <a href="#gclient_t.lastCmdTime">lastCmdTime</a>;        // level.time of last usercmd_t, for EF_CONNECTION
+                                    // we can't just use pers.lastCommand.time, because
+                                    // of the g_sycronousclients case
+    int         <a href="#gclient_t.buttons">buttons</a>;
+    int         <a href="#gclient_t.oldbuttons">oldbuttons</a>;
+    int         <a href="#gclient_t.latched_buttons">latched_buttons</a>;
+
+    vec3_t      <a href="#gclient_t.oldOrigin">oldOrigin</a>;
+
+    // sum up damage over an entire frame, so
+    // shotgun blasts give a single big kick
+    int         <a href="#gclient_t.damage_armor">damage_armor</a>;       // damage absorbed by armor
+    int         <a href="#gclient_t.damage_blood">damage_blood</a>;       // damage taken out of health
+    int         <a href="#gclient_t.damage_knockback">damage_knockback</a>;   // impact damage
+    vec3_t      <a href="#gclient_t.damage_from">damage_from</a>;        // origin for vector calculation
+    qboolean    <a href="#gclient_t.damage_fromWorld">damage_fromWorld</a>;   // if true, don't use the damage_from vector
+
+    int         <a href="#gclient_t.accurateCount">accurateCount</a>;      // for "impressive" reward sound
+
+    int         <a href="#gclient_t.accuracy_shots">accuracy_shots</a>;     // total number of shots
+    int         <a href="#gclient_t.accuracy_hits">accuracy_hits</a>;      // total number of hits
+
+    //
+    int         <a href="#gclient_t.lastkilled_client">lastkilled_client</a>;  // last client that this client killed
+    int         <a href="#gclient_t.lasthurt_client">lasthurt_client</a>;    // last client that damaged this client
+    int         <a href="#gclient_t.lasthurt_mod">lasthurt_mod</a>;       // type of damage the client did
+
+    // timers
+    int         <a href="#gclient_t.respawnTime">respawnTime</a>;        // can respawn when time > this, force after g_forcerespwan
+    int         <a href="#gclient_t.inactivityTime">inactivityTime</a>;     // kick players when time > this
+    qboolean    <a href="#gclient_t.inactivityWarning">inactivityWarning</a>;  // qtrue if the five seoond warning has been given
+    int         <a href="#gclient_t.rewardTime">rewardTime</a>;         // clear the EF_AWARD_IMPRESSIVE, etc when time > this
+
+    int         <a href="#gclient_t.airOutTime">airOutTime</a>;
+
+    int         <a href="#gclient_t.lastKillTime">lastKillTime</a>;       // for multiple kill rewards
+
+    qboolean    <a href="#gclient_t.fireHeld">fireHeld</a>;           // used for hook
+    <a href="#gentity_t">gentity_t</a>   *<a href="#gclient_t.hook">hook</a>;              // grapple hook if out
+
+    int         <a href="#gclient_t.switchTeamTime">switchTeamTime</a>;     // time the player switched teams
+
+    // timeResidual is used to handle events that happen every second
+    // like health / armor countdowns and regeneration
+    int         <a href="#gclient_t.timeResidual">timeResidual</a>;
+
+#ifdef MISSIONPACK
+    gentity_t   *persistantPowerup;
+    int         portalID;
+    int         ammoTimes[WP_NUM_WEAPONS];
+    int         invulnerabilityTime;
+#endif
+
+    char        *<a href="#gclient_t.areabits">areabits</a>;
+
+};
+</pre><hr>
+<dl>
+<dt><a name="gclient_t.ps">ps</a></dt><dd>
+A playerState_t struct.
+The Q3 engine expects this field at the beginning of the gclient_t struct.
+</dd>
+<dt><a name="gclient_t.pers">pers</a></dt><dd>Persistant data.
+This is data that does not reset across multiple respawns, but does reset on level change or team change.
+</dd>
+<dt><a name="gclient_t.sess">sess</a></dt><dd>Client session data.
+Data that remains with the client until disconnection or server shutdown.
+Preserved across level change (by use of cvars).
+</dd>
+<dt><a name="gclient_t.readyToExit">readyToExit</a></dt><dd>Whether client is &quot;READY&quot; to leave intermission (the &quot;READY&quot; mark on scoreboard).
+</dd>
+<dt><a name="gclient_t.noclip">noclip</a></dt><dd>Whether client is in &quot;noclip&quot; mode or not.
+</dd>
+<dt><a name="gclient_t.lastCmdTime">lastCmdTime</a></dt><dd>Time of the last command (usercmd_t) from the client.
+Can help indicate an impending connection loss.
+(XXX: what's this about pers.lastCommand.time?)
+</dd>
+<dt><a name="gclient_t.buttons">buttons</a></dt><dd>
+A bitmask of the currently pressed game buttons (+attack, +gesture, +button5).
+</dd>
+<dt><a name="gclient_t.oldbuttons">oldbuttons</a></dt><dd>
+A bitmask of the game buttons from the prior command (usercmd_t).
+Helps determine change of button state.
+</dd>
+<dt><a name="gclient_t.latched_buttons">latched_buttons</a></dt><dd>
+Stores buttons still held down (as opposed having been just pressed or released).
+</dd>
+<dt><a name="gclient_t.oldOrigin">oldOrigin</a></dt><dd>
+???
+</dd>
+<dt><a name="gclient_t.damage_armor">damage_armor</a></dt><dd>
+Amount of damage to armor.
+</dd>
+<dt><a name="gclient_t.damage_blood">damage_blood</a></dt><dd>
+Amount of damage to health.
+</dd>
+<dt><a name="gclient_t.damage_knockback">damage_knockback</a></dt><dd>
+Cumulative knockback force.
+</dd>
+<dt><a name="gclient_t.damage_from">damage_from</a></dt><dd>
+Direction of damage source.
+</dd>
+<dt><a name="gclient_t.damage_fromWorld">damage_fromWorld</a></dt><dd>Whether to ignore knockback or not (e.g. though lava is damage from the world, it doesn't knock the player back into the air).
+</dd>
+<dt><a name="gclient_t.accurateCount">accurateCount</a></dt><dd>
+Counter to keep track of railgun "Impressive" reward.
+</dd>
+<dt><a name="gclient_t.accuracy_shots">accuracy_shots</a></dt><dd>
+Number of shots fired.
+</dd>
+<dt><a name="gclient_t.accuracy_hits">accuracy_hits</a></dt><dd>
+Number of shots that hit someone.
+</dd>
+<dt><a name="gclient_t.lastkilled_client">lastkilled_client</a></dt><dd>
+Most recent client/player fragged by this one.
+</dd>
+<dt><a name="gclient_t.lasthurt_client">lasthurt_client</a></dt><dd>
+Most recent client/player to hurt this one (initialized 0).
+</dd>
+<dt><a name="gclient_t.lasthurt_mod">lasthurt_mod</a></dt><dd>
+Type of damage (means of death/damage) from most recent damage.
+</dd>
+<dt><a name="gclient_t.respawnTime">respawnTime</a></dt><dd>
+The <var>level.time</var> when the player is scheduled to respawn.
+</dd>
+<dt><a name="gclient_t.inactivityTime">inactivityTime</a></dt><dd>
+Scheduled <var>level.time</var> to kick player for inactivity.
+This timer is updated on each "activity" action to be <var>level.time</var> + some constant.
+</dd>
+<dt><a name="gclient_t.inactivityWarning">inactivityWarning</a></dt><dd>
+Whether or not inactivity warning has been given.
+</dd>
+<dt><a name="gclient_t.rewardTime">rewardTime</a></dt><dd>
+Scheduled <var>level.time</var> the overhead reward sprite expires.
+</dd>
+<dt><a name="gclient_t.airOutTime">airOutTime</a></dt><dd>
+Scheduled <var>level.time</var> for air expiration (drowning).
+</dd>
+<dt><a name="gclient_t.lastKillTime">lastKillTime</a></dt><dd>
+The <var>level.time</var> when player was most recently fragged.
+</dd>
+<dt><a name="gclient_t.fireheld">fireheld</a></dt><dd>
+Boolean flag to indicate constant firing for lightning gun and grappling hook.
+</dd>
+<dt><a name="gclient_t.hook">hook</a></dt><dd>Pointer to the hook entity/missile.
+This is the part that's flying.
+The line between the player and hook is implied, rendered client side.
+</dd>
+<dt><a name="gclient_t.switchTeamTime">switchTeamTime</a></dt><dd>
+Schedule <var>level.time</var> when the player may change teams.
+Intended to prevent team-switch spams.
+</dd>
+<dt><a name="gclient_t.timeResidual">timeResidual</a></dt><dd>
+Number of milliseconds since most recent 1-second boundary, for once-per-second effects (e.g. regeneration).
+This counter ensures once-per-second events happen after 1000 or more milliseconds passed.
+The counter is reset to zero on each once-per-second event.
+</dd>
+<dt><a name="gclient_t.areabits">areabits</a></dt><dd>
+Something to do with the AI bot?
+</dd>
+</dl>
+
+<h3><a name="clientPersistant_t">struct clientPersistant_t</a></h3>
+Persistant data is data preserved across respawns, but not on level change or team change.
+That sort of data is covered by <a href="#clientSession_t">clientSession_t</a>.
+<p>
+<hr><pre>
+// client data that stays across multiple respawns, but is cleared
+// on each level change or team change at ClientBegin()
+typedef struct {
+    <a href="#clientConnected_t">clientConnected_t</a>   <a href="#clientPersistant_t.connected">connected</a>;
+    usercmd_t   <a href="#clientPersistant_t.cmd">cmd</a>;                // we would lose angles if not persistant
+    qboolean    <a href="#clientPersistant_t.localClient">localClient</a>;        // true if "ip" info key is "localhost"
+    qboolean    <a href="#clientPersistant_t.initialSpawn">initialSpawn</a>;       // the first spawn should be at a cool locat
+ion
+    qboolean    <a href="#clientPersistant_t.predictItemPickup">predictItemPickup</a>;  // based on cg_predictItems userinfo
+    qboolean    <a href="#clientPersistant_t.pmoveFixed">pmoveFixed</a>;         //
+    char        <a href="#clientPersistant_t.netname[MAX_NETNAME]">netname[MAX_NETNAME]</a>;
+    int         <a href="#clientPersistant_t.maxHealth">maxHealth</a>;          // for handicapping
+    int         <a href="#clientPersistant_t.enterTime">enterTime</a>;          // level.time the client entered the game
+    <a href="#playerTeamState_t">playerTeamState_t</a> <a href="#clientPersistant_t.teamState">teamState</a>;    // status in teamplay games
+    int         <a href="#clientPersistant_t.voteCount">voteCount</a>;          // to prevent people from constantly calling
+ votes
+    int         <a href="#clientPersistant_t.teamVoteCount">teamVoteCount</a>;      // to prevent people from constantly calling
+ votes
+    qboolean    <a href="#clientPersistant_t.teamInfo">teamInfo</a>;           // send team overlay updates?
+} clientPersistant_t;
+</pre><hr>
+<dl>
+<dt><a name="clientPersistant_t.connected">connected</a></dt><dd>
+Connection state of client.  See also <a href="#clientConnected_t">clientConnected_t</a>.
+</dd>
+<dt><a name="clientPersistant_t.cmd">cmd</a></dt><dd>
+??? (why would it lose otherwise?)
+</dd>
+<dt><a name="clientPersistant_t.localClient">localClient</a></dt><dd>
+Whether client is local (one same machine as server).
+For example, single-player mode.
+</dd>
+<dt><a name="clientPersistant_t.initialSpawn">initialSpawn</a></dt><dd>
+True if client has not yet spawned in the game.
+</dd>
+<dt><a name="clientPersistant_t.predictedItemPickup">predictedItemPickup</a></dt><dd>
+Whether client wants item prediction?
+</dd>
+<dt><a name="clientPersistant_t.pmoveFixed">pmoveFixed</a></dt><dd>
+(the &quot;fixed&quot; used here is the &quot;not changing; not varying; no wiggle room&quot; sense)
+</dd>
+<dt><a name="clientPersistant_t.netname[MAX_NETNAME]">netname[MAX_NETNAME]</a></dt><dd>
+Player's name.
+<tt>MAX_NETNAME</tt> is 36 (defined in g_local.h).
+</dd>
+<dt><a name="clientPersistant_t.maxHealth">maxHealth</a></dt><dd>
+Handicap value (initial (re)spawn health).
+Expert players can reduce their handicap (health) to give less-experienced players a more even playing field.
+</dd>
+<dt><a name="clientPersistant_t.enterTime">enterTime</a></dt><dd>
+The <var>level.time</var> the client completely connected to the server (and able to chat, play, etc.).
+</dd>
+<dt><a name="clientPersistant_t.teamState">teamState</a></dt><dd>
+team state information.  See also <a href="#playerTeamState_t">playerTeamState_t</a>.
+</dd>
+<dt><a name="clientPersistant_t.voteCount">voteCount</a></dt><dd>
+Counter for number of callvotes initiated by this client.
+</dd>
+<dt><a name="clientPersistant_t.teamVoteCount">teamVoteCount</a></dt><dd>
+Counter for number of team callvotes initiated by this client.
+</dd>
+<dt><a name="clientPersistant_t.teamInfo">teamInfo</a></dt><dd>
+Whether client wants to receive team info or not (in consideration of bandwidth).
+</dd>
+</dl>
+
+<h3><a name="clientSession_t">struct clientSession_t</a></h3>
+<p>
+A &quot;session&quot; for a client is the span of time and activity between the client's connect and the client's disconnect.
+A reconnect creates a new session (disconnect + connect).
+A session can span across multiple level (map) changes (connect, play, change map, play, change map, play, disconnect).
+Since the Q3VM and all memory within a .qvm are reset on map changes,
+the data in a clientSession_t (which is in the VM memory space) must be stored outside the VM to survive level changes.
+The most common form is cvars, although files are also feasible.
+<hr><pre>
+// client data that stays across multiple levels or tournament restarts
+// this is achieved by writing all the data to cvar strings at game shutdown
+// time and reading them back at connection time.  Anything added here
+// MUST be dealt with in G_InitSessionData() / G_ReadSessionData() / G_WriteSessionData()
+typedef struct {
+    team_t      <a href="#clientSession_t.sessionTeam">sessionTeam</a>;
+    int         <a href="#clientSession_t.spectatorTime">spectatorTime</a>;      // for determining next-in-line to play
+    spectatorState_t    <a href="#clientSession_t.spectatorState">spectatorState</a>;
+    int         <a href="#clientSession_t.spectatorClient">spectatorClient</a>;    // for chasecam and follow mode
+    int         <a href="#clientSession_t.wins">wins</a>, <a href="#clientSession_t.losses">losses</a>;       // tournament stats
+    qboolean    <a href="#clientSession_t.teamLeader">teamLeader</a>;         // true when this client is a team leader
+} clientSession_t;
+</pre><hr>
+<dl>
+<dt><a name="clientSession_t.sessionTeam">sessionTeam</a></dt><dd>
+This client's team.
+</dd>
+<dt><a name="clientSession_t.spectatorTime">spectatorTime</a></dt><dd>
+The <var>level.time</var> this client joined the tournmanet queue (lowest value goes next in tournament mode).
+</dd>
+<dt><a name="clientSession_t.spectatorState">spectatorState</a></dt><dd>
+If spectator, spectating style. See also <a href="#spectatorState_t">spectatorState_t</a>.
+</dd>
+<dt><a name="clientSession_t.spectatorClient">spectatorClient</a></dt><dd>
+If spectator, which client is being spectated (valid or not based on <a href="#clientSession_t.spectatorState">spectatorState</a>).
+</dd>
+<dt><a name="clientSession_t.wins">wins</a></dt><dd>
+Total number of wins for this client.
+</dd>
+<dt><a name="clientSession_t.losses">losses</a></dt><dd>
+Total number of losses for this client.
+</dd>
+<dt><a name="clientSession_t.teamLeader">teamLeader</a></dt><dd>
+Client is a team leader (XXX: only for MISSIONPACK?).
+</dd>
+</dl>
+
+<h3><a name="playerTeamState_t">struct playerTeamState_t</a></h3>
+<p>
+A player's team-related status in a team game.
+
+<hr><pre>
+typedef struct {
+    <a href="#playerTeamStateState_t">playerTeamStateState_t</a>  <a href="#playerTeamState_t.state">state</a>;
+
+    int         <a href="#playerTeamState_t.location">location</a>;
+
+    int         <a href="#playerTeamState_t.captures">captures</a>;
+    int         <a href="#playerTeamState_t.basedefense">basedefense</a>;
+    int         <a href="#playerTeamState_t.carrierdefense">carrierdefense</a>;
+    int         <a href="#playerTeamState_t.flagrecovery">flagrecovery</a>;
+    int         <a href="#playerTeamState_t.fragcarrier">fragcarrier</a>;
+    int         <a href="#playerTeamState_t.assists">assists</a>;
+
+    float       <a href="#playerTeamState_t.lasthurtcarrier">lasthurtcarrier</a>;
+    float       <a href="#playerTeamState_t.lastreturnedflag">lastreturnedflag</a>;
+    float       <a href="#playerTeamState_t.flagsince">flagsince</a>;
+    float       <a href="#playerTeamState_t.lastfraggedcarrier">lastfraggedcarrier</a>;
+} playerTeamState_t;
+</pre><hr>
+<dl>
+<dt><a name="playerTeamState_t.state">state</a></dt><dd>
+Player's relationship with a team.  See also <a href="#playerTeamStateState_t">playerTeamStateState_t</a>.
+</dd>
+<dt><a name="playerTeamState_t.location">location</a></dt><dd>
+Index of the nearest target_location entity to this player (used in team overlay).
+</dd>
+<dt><a name="playerTeamState_t.captures">captures</a></dt><dd>
+Number of objective (flag, skull) captures.
+</dd>
+<dt><a name="playerTeamState_t.basedefense">basedefense</a></dt><dd>
+Number of times this player defended the base (Base Defense award).
+</dd>
+<dt><a name="playerTeamState_t.carrierdefense">carrierdefense</a></dt><dd>
+Number of times this player defended a friendly flag carrier (Carrier Defense award).
+</dd>
+<dt><a name="playerTeamState_t.flagrecovery">flagrecovery</a></dt><dd>
+Number of times this player recovered the flag (Flag Recovery award).
+</dd>
+<dt><a name="playerTeamState_t.fragcarrier">fragcarrier</a></dt><dd>
+Number of times this player fragged the enemy flag carrier (Frag Carrier award).
+</dd>
+<dt><a name="playerTeamState_t.assists">assists</a></dt><dd>
+Number of times this player assisted a flag capture(?) (Assist awards).
+</dd>
+<dt><a name="playerTeamState_t.lasthurtcarrier">lasthurtcarrier</a></dt><dd>
+The <var>level.time</var> the player hurt an enemy flag carrier (used for what?).
+</dd>
+<dt><a name="playerTeamState_t.lastreturnedflag">lastreturnedflag</a></dt><dd>
+The <var>level.time</var> the player returned the flag, used for Flag Recovery and Assist awards.
+</dd>
+<dt><a name="playerTeamState_t.flagsince">flagsince</a></dt><dd>
+The <var>level.time</var> the player stole the enemy flag.
+</dd>
+<dt><a name="playerTeamState_t.lastfraggedcarrier">lastfraggedcarrier</a></dt><dd>
+The <var>level.time</var> when the client fragged an enemy flag carrier (used for Assist awards).
+</dd>
+</dl>
+
+
+
+<h3><a name="clientConnected_t">enum clientConnected_t</a></h3>
+<p>
+Constants describing the connection state of a client in <a href="#clientPersistant_t.connected">clientPersistant_t.connected</a>.
+
+
+<p>
+<hr><pre>
+typedef enum {
+    <a href="#clientConnected_t.CON_DISCONNECTED">CON_DISCONNECTED</a>,
+    <a href="#clientConnected_t.CON_CONNECTING">CON_CONNECTING</a>,
+    <a href="#clientConnected_t.CON_CONNECTED">CON_CONNECTED</a>
+} clientConnected_t;
+</pre><hr>
+<dl>
+<dt><a name="clientConnected_t.CON_DISCONNECTED">CON_DISCONNECTED</a></dt><dd>Client is gone; client slot not in use.</dd>
+<dt><a name="clientConnected_t.CON_CONNECTED">CON_CONNECTED</a></dt><dd>Client is fully connected and able to do game stuff.</dd>
+<dt><a name="clientConnected_t.CON_CONNECTING">CON_CONNECTING</a></dt><dd>Client is negotiating connection handshake (existence acknowleged, but unable to interact yet).  Typically indicates the client is (still) loading game data/models/map.</dd>
+</dl>
+
+
+<h3><a name="playerTeamStateState_t">enum playerTeamStateState_t</a></h3>
+<p>
+For <a href="#playerTeamState_t">playerTeamState_t</a>.
+These values indicate the player's relation to a team at (re)spawn time.
+
+
+<p>
+<hr><pre>
+typedef enum {
+    <a href="#playerTeamStateState_t.TEAM_BEGIN">TEAM_BEGIN</a>,     // Beginning a team game, spawn at base
+    <a href="#playerTeamStateState_t.TEAM_ACTIVE">TEAM_ACTIVE</a>     // Now actively playing
+} playerTeamStateState_t;
+</pre><hr>
+<dl>
+<dt><a name="playerTeamStateState_t.TEAM_BEGIN">TEAM_BEGIN</a></dt><dd>
+Player is spawning on this team for the first time.
+</dd>
+<dt><a name="playerTeamStateState_t.TEAM_ACTIVE">TEAM_ACTIVE</a></dt><dd>
+Player has already been on this team.
+</dd>
+</dl>
+
+<h3><a name="spectatorState_t">enum spectatorState_t</a></h3>
+<p>
+Style of spectating for a spectator, <a href="#clientSession_t.spectatorState">clientSession_t.spectatorState</a>.
+The field <a href="#clientSession_t.spectatorClient">clientSession_t.spectatorClient</a> may be used, depending on the particular handling of a spectator state.
+
+
+<p>
+<hr><pre>
+typedef enum {
+    <a href="#spectatorState_t.SPECTATOR_NOT">SPECTATOR_NOT</a>,
+    <a href="#spectatorState_t.SPECTATOR_FREE">SPECTATOR_FREE</a>,
+    <a href="#spectatorState_t.SPECTATOR_FOLLOW">SPECTATOR_FOLLOW</a>,
+    <a href="#spectatorState_t.SPECTATOR_SCOREBOARD">SPECTATOR_SCOREBOARD</a>
+} spectatorState_t;
+</pre><hr>
+<dl>
+<dt><a name="spectatorState_t.SPECTATOR_NOT">SPECTATOR_NOT</a></dt><dd>Not spectating/not a spectator.</dd>
+<dt><a name="spectatorState_t.SPECTATOR_FREE">SPECTATOR_FREE</a></dt><dd>Free movement.</dd>
+<dt><a name="spectatorState_t.SPECTATOR_FOLLOW">SPECTATOR_FOLLOW</a></dt><dd>Follow a client.  The client to follow is specified in <a href="#clientSession_t.spectatorClient">clientSession_t.spectatorClient</a>.</dd>
+<dt><a name="spectatorState_t.SPECTATOR_SCOREBOARD">SPECTATOR_SCOREBOARD</a></dt><dd>Spectator at intermission (looking at scoreboad)</dd>
+</dl>
+
+
+<h3><a name="level_locals_t">struct level_locals_t</a></h3>
+<p>
+Various level-wide variables.
+
+
+<p>
+<hr><pre>
+typedef struct {
+    struct gclient_s    *clients;       // [maxclients]
+
+    struct gentity_s    *gentities;
+    int         gentitySize;
+    int         num_entities;       // current number, <= MAX_GENTITIES
+
+    int         warmupTime;         // restart match at this time
+
+    fileHandle_t    logFile;
+
+    // store latched cvars here that we want to get at often
+    int         maxclients;
+
+    int         framenum;
+    int         time;                   // in msec
+    int         previousTime;           // so movers can back up when blocked
+
+    int         startTime;              // level.time the map was started
+
+    int         teamScores[TEAM_NUM_TEAMS];
+    int         lastTeamLocationTime;       // last time of client team location update
+
+    qboolean    newSession;             // don't use any old session data, because
+                                        // we changed gametype
+
+    qboolean    restarted;              // waiting for a map_restart to fire
+
+    int         numConnectedClients;
+    int         numNonSpectatorClients; // includes connecting clients
+    int         numPlayingClients;      // connected, non-spectators
+    int         sortedClients[MAX_CLIENTS];     // sorted by score
+    int         follow1, follow2;       // clientNums for auto-follow spectators
+
+    int         snd_fry;                // sound index for standing in lava
+
+    int         warmupModificationCount;    // for detecting if g_warmup is changed
+
+    // voting state
+    char        voteString[MAX_STRING_CHARS];
+    char        voteDisplayString[MAX_STRING_CHARS];
+    int         voteTime;               // level.time vote was called
+    int         voteExecuteTime;        // time the vote is executed
+    int         voteYes;
+    int         voteNo;
+    int         numVotingClients;       // set by CalculateRanks
+
+    // team voting state
+    char        teamVoteString[2][MAX_STRING_CHARS];
+    int         teamVoteTime[2];        // level.time vote was called
+    int         teamVoteYes[2];
+    int         teamVoteNo[2];
+    int         numteamVotingClients[2];// set by CalculateRanks
+
+    // spawn variables
+    qboolean    spawning;               // the G_Spawn*() functions are valid
+    int         numSpawnVars;
+    char        *spawnVars[MAX_SPAWN_VARS][2];  // key / value pairs
+    int         numSpawnVarChars;
+    char        spawnVarChars[MAX_SPAWN_VARS_CHARS];
+
+    // intermission state
+    int         intermissionQueued;     // intermission was qualified, but
+                                        // wait INTERMISSION_DELAY_TIME before
+                                        // actually going there so the last
+                                        // frag can be watched.  Disable future
+                                        // kills during this delay
+    int         intermissiontime;       // time the intermission was started
+    char        *changemap;
+    qboolean    readyToExit;            // at least one client wants to exit
+    int         exitTime;
+    vec3_t      intermission_origin;    // also used for spectator spawns
+    vec3_t      intermission_angle;
+
+    qboolean    locationLinked;         // target_locations get linked
+    gentity_t   *locationHead;          // head of the location list
+    int         bodyQueIndex;           // dead bodies
+    gentity_t   *bodyQue[BODY_QUEUE_SIZE];
+#ifdef MISSIONPACK
+    int         portalSequence;
+#endif
+} level_locals_t;
+</pre><hr>
+<dl>
+<dt><a name="level_locals_t.field">field</a></dt><dd>description</dd>
+</dl>
+
+
+<hr id="footer" width="42%" align="left">
+<p>
+Created 2002.09.21
+<BR>Updated 2002.12.03
+<BR>Updated 2003.11.10 - additions from cyrri.
+<BR>Updated 2011.07.11 - change of contact e-mail.
+<address>
+PhaethonH
+&lt; PhaethonH@gmail.com &gt;
+</address>
+</body>
+</html>

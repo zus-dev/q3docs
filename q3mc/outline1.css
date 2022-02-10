@@ -1,0 +1,62 @@
+UL {
+  list-style-type: disc;
+  }
+UL UL {
+  list-style-type: circle;
+  }
+UL UL UL {
+  list-style-type: square;
+  }
+HR#codestart {
+  width: 100%;
+  }
+HR#codestop {
+  width: 100%;
+  }
+HR#footer {
+  border-top: ridge;
+  border-bottom: none;
+  width: 42%;
+  margin-left: 0;
+  margin-right: auto;
+  }
+.filename {
+  font-style: normal;
+  font-weight: bold;
+  font-family: monospace;
+  }
+.funcname {
+  font-style: italic;
+  font-weight: bold;
+  }
+.varname {
+  font-style: italic;
+  }
+.constname {
+  font-style: normal;
+  font-weight: bold;
+  font-family: monospace;
+  }
+.typename {
+  font-style: italic;
+  }
+.keyname {
+  font-style: normal;
+  font-family: monospace;
+  }
+.command {
+  font-style: normal;
+  font-family: monospace;
+  font-weight: bold;
+  }
+.xxx {
+  color: pink;
+  background-color: yellow;
+  text-decoration: underline overline blink;
+  font-style: italic;
+  font-weigh: bolder;
+  }
+.indented {
+  margin-left: 5%;
+  margin-right: 5%;
+  }

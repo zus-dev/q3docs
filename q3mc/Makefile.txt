@@ -1,0 +1,25 @@
+
+PROCESSED_HTML = \
+ outline1.html \
+ immutable1.html \
+ maingame1.html \
+ q3vm_specs.html \
+ outline2.html
+
+PUBLISH_FILES = \
+ q3mc.html \
+ Makefile \
+ outline1.* \
+ immutable1.* \
+ maingame1.* \
+ q3vm_specs.* \
+ outline2.*
+
+all: $(PROCESSED_HTML)
+
+%.html: %.html.m4
+	m4 $^ > $@
+
+publish: $(PUBLISH_FILES)
+	scp -C $(PUBLISH_FILES) phaethon@gamehenge:~/public_html/q3mc/
+	scp -C $(PUBLISH_FILES) phaethon@xorn:~/public_html/q3mc/

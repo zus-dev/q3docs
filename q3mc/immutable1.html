@@ -1,0 +1,1327 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<title>Q3A Immutable Structs</title>
+</head>
+<body>
+<h1>Q3A Immutable Structs</h1>
+
+<h2>Synopsis</h2><p>Description of the immutable structs, the structs in <tt>q_shared.h</tt> that may not be changed by a game module, and some of its related constants.</p>
+
+<h3><a name="template">Template</a></h3>
+<p>
+blurb
+
+
+<p>
+<hr><pre>
+/* paste source text here */
+</pre><hr>
+<dl>
+<dt><a name="template.field">field</a></dt><dd>description</dd>
+</dl>
+
+
+
+<p>
+<h3><a name="TOC">Table of Contents</a></h3>
+<ol>
+<li><a href="#template">Template</a></li>
+<li><a href="#cplane_t">struct cplane_t</a></li>
+<li><a href="#trace_t">struct trace_t</a></li>
+<li><a href="#SURF_*">SURF_* constants</a></li>
+<li><a href="#CONTENTS_*">CONTENTS_* constants</a></li>
+<li><a href="#playerState_t">struct playerState_t</a></li>
+<li><a href="#PM_*">PM_* constants</a></li>
+<li><a href="#PMF_*">PMF_* constants</a></li>
+<li><a href="#STAT_*">STAT_* stats elements</a></li>
+<li><a href="#HI_*">HI_* holdable items</a></li>
+<li><a href="#PERS_*">PERS_* persistant elements</a></li>
+<li><a href="#PW_*">PW_* powerups elements</a></li>
+<li><a href="#WP_*">WP_* weapons</a></li>
+<li><a href="#usercmd_t">struct usercmd_t</a></li>
+<li><a href="#trajectory_t">struct trajectory_t</a></li>
+<li><a href="#trType_t">enum trType_t</a></li>
+<li><a href="#entityState_t">struct entityState_t</a></li>
+<li><a href="#entityType_t">enum entityType_t</a></li>
+<li><a href="#EF_*">EF_* constants</a></li>
+<li><a href="#entityShared_t">struct entityShared_t</a></li>
+<li><a href="#SVF_*">SVF_* constants</a></li>
+<li><a href="#TOC">Table of Contents</a></li></ol>
+
+
+
+<h3><a name="cplane_t">struct cplane_t</a></h3>
+<p>
+This data type is included in <a href="#trace_t">trace_t</a>,
+representing information about a collision against/into a surface (such as a wall).
+Presumably the detection code is hand-written in assembly for maximum speed.
+The prefixing &quot;c&quot; reflects the &quot;C version&quot; of this datatype, whereas the &quot;assembly version&quot; may not have a similar definition (perhaps offsets are all hand-coded?).
+
+
+<p>
+<hr><pre>
+// plane_t structure
+// !!! if this is changed, it must be changed in asm code too !!!
+typedef struct cplane_s {
+    vec3_t  <a href="#cplane_t.normal">normal</a>;
+    float   <a href="#cplane_t.dist">dist</a>;
+    byte    <a href="#cplane_t.type">type</a>;           // for fast side tests: 0,1,2 = axial, 3 = nonaxial
+    byte    <a href="#cplane_t.signbits">signbits</a>;       // signx + (signy<<1) + (signz<<2), used as lookup during collision
+    byte    <a href="#cplane_t.pad[2]">pad[2]</a>;
+} cplane_t;
+</pre><hr>
+<dl>
+<dt><a name="cplane_t.normal">normal</a></dt><dd>The normal vector of the plane.
+One use is to calculate the bouncing vector (direction).
+Another is to calculate how &quot;straight-on&quot; a collision against a wall is.
+The spatial position of this vector is indicated by the <a href="#trace_t.endpos">endpos</a> field of <a href="#trace_t">trace_t</a>.
+</dd>
+<dt><a name="cplane_t.dist">dist</a></dt><dd>
+With the normal vector passing through the spatial origin (0, 0, 0), the distance of the plane from the origin along the normal vector.
+This is the d component of the general plane equation ax + by + cz = d (or is it ax + by + cz + d = 0?).
+Refer to mathematical textbooks on 3D geometry for further information about equations describing planes.
+<!-- Thanks djbob -->
+</dd>
+<dt><a name="cplane_t.type">type</a></dt><dd>
+0 = plane('s normal vector) is axially aligned on X axis.
+1 = plane('s normal vector) is axially aligned on Y axis.
+2 = plane('s normal vector) is axially aligned on Z axis.
+3 = not aligned with an axis.
+This only makes sense for quick &quot;level/even surface&quot; tests (like walls and floors of a square room).
+<!-- Thanks djbob -->
+</dd>
+<dt><a name="cplane_t.signbits">signbits</a></dt><dd>
+Bitmask indicating the signs (positive/negative) of the <a href="#cplane_t.normal">normal</a> vector elements.
+(XXX: what bit value means negative?)
+</dd>
+<dt><a name="cplane_t.pad[2]">pad[2]</a></dt><dd>padding space for word alignment purposes.  With this padding space, the size of this struct is the same in a &quot;packed&quot; and &quot;unpacked&quot; form.</dd>
+</dl>
+
+<h3><a name="trace_t">struct trace_t</a></h3>
+<p>
+This is the data type returned by <var>trap_Trace()</var>.
+The contained information assists in determining collisions.
+
+
+<p>
+<hr><pre>
+// a trace is returned when a box is swept through the world
+typedef struct {
+    qboolean    <a href="#trace_t.allsolid">allsolid</a>;   // if true, plane is not valid
+    qboolean    <a href="#trace_t.startsolid">startsolid</a>; // if true, the initial point was in a solid area
+    float       <a href="#trace_t.fraction">fraction</a>;   // time completed, 1.0 = didn't hit anything
+    vec3_t      <a href="#trace_t.endpos">endpos</a>;     // final position
+    <a href="#cplane_t">cplane_t</a>    <a href="#trace_t.plane">plane</a>;      // surface normal at impact, transformed to world space 
+    int         <a href="#trace_t.surfaceFlags">surfaceFlags</a>;   // surface hit
+    int         <a href="#trace_t.contents">contents</a>;   // contents on other side of surface hit
+    int         <a href="#trace_t.entityNum">entityNum</a>;  // entity the contacted sirface is a part of
+} trace_t;
+</pre><hr>
+
+<dl>
+<dt><a name="trace_t.allsolid">allsolid</a></dt><dd>If true, means both the start and end (and everything in between) of the trace reside within a solid region.  This situation essentially means the trace turned up nothing useful (no collision, or &quot;collision with self&quot;).</dd>
+<dt><a name="trace_t.startsolid">startsolid</a></dt><dd>(If true, means the start of the trace resides in a solid region, but the end of the trace does not... or that there is a spot in between that isn't solid... not sure.</dd>
+<dt><a name="trace_t.fraction">fraction</a></dt><dd>Indicates what fraction of the trace line was consumed to reach this collision.
+A value of 1.0 means the complete trace was consumed without turning up a collision.
+Values less than 1.0 indicate a collision at a point proportional along the line of trace, with values towards 0.0 meaning near the start, values towards 0.5 meaning near the middle of the trace, and values towards 1.0 meaning near the end of the trace.
+</dd>
+<dt><a name="trace_t.endpos">endpos</a></dt><dd>The position of the collision point.
+The desired/estimated start and end position of the trace are passed to trap_Trace(); this field indicates the exact point of collision.
+</dd>
+<dt><a name="trace_t.plane">plane</a></dt><dd>(not expanding on comments).  See also <a href="#cplane_t">cplane_t</a>.</dd>
+<dt><a name="trace_t.surfaceFlags">surfaceFlags</a></dt><dd>Bit flags of <tt><a href="#SURF_*">SURF_*</a></tt> constants.</dd>
+<dt><a name="trace_t.contents">contents</a></dt><dd>Bit flags of <tt><a href="#CONTENTS_*">CONTENTS_*</a></tt> constants.</dd>
+<dt><a name="trace_t.entityNum">entityNum</a></dt><dd>Value ranges from 0 through <tt>MAX_GENTITIES</tt>-3 (1021) to indicate collision against a game entity.
+The value may also be <tt>ENTITYNUM_NONE</tt> (1023) to indicate collision against nothing, or <tt>ENTITYNUM_WORLD</tt> (1022) to indicate collision against something that doesn't belong to a game entity (such as a door)</dd>
+</dl>
+
+<h3><a name="SURF_*">SURF_* constants</a></h3>
+<p>
+These sets of values are bitmasks indicating a distinct game surface attribute.
+Trace collisions detected by <var>trap_Trace()</var> determine the surface attributes where the collision ends.
+The game module may respond to each distinct surface type.
+XXX: don't know about adding new SURF constants
+
+
+<hr><pre>
+#define <a href="#SURF_*.SURF_NODAMAGE">SURF_NODAMAGE</a>      0x1      // never give falling damage
+#define <a href="#SURF_*.SURF_SLICK">SURF_SLICK</a>         0x2      // effects game physics
+#define <a href="#SURF_*.SURF_SKY">SURF_SKY</a>           0x4      // lighting from environment map
+#define <a href="#SURF_*.SURF_LADDER">SURF_LADDER</a>        0x8
+#define <a href="#SURF_*.SURF_NOIMPACT">SURF_NOIMPACT</a>      0x10     // don't make missile explosions
+#define <a href="#SURF_*.SURF_NOMARKS">SURF_NOMARKS</a>       0x20     // don't leave missile marks
+#define <a href="#SURF_*.SURF_FLESH">SURF_FLESH</a>         0x40     // make flesh sounds and effects
+#define <a href="#SURF_*.SURF_NODRAW">SURF_NODRAW</a>        0x80     // don't generate a drawsurface at all
+#define <a href="#SURF_*.SURF_HINT">SURF_HINT</a>          0x100    // make a primary bsp splitter
+#define <a href="#SURF_*.SURF_SKIP">SURF_SKIP</a>          0x200    // completely ignore, allowing non-closed brushes
+#define <a href="#SURF_*.SURF_NOLIGHTMAP">SURF_NOLIGHTMAP</a>    0x400    // surface doesn't need a lightmap
+#define <a href="#SURF_*.SURF_POINTLIGHT">SURF_POINTLIGHT</a>    0x800    // generate lighting info at vertexes
+#define <a href="#SURF_*.SURF_METALSTEPS">SURF_METALSTEPS</a>    0x1000   // clanking footsteps
+#define <a href="#SURF_*.SURF_NOSTEPS">SURF_NOSTEPS</a>       0x2000   // no footstep sounds
+#define <a href="#SURF_*.SURF_NONSOLID">SURF_NONSOLID</a>      0x4000   // don't collide against curves with this set
+#define <a href="#SURF_*.SURF_LIGHTFILTER">SURF_LIGHTFILTER</a>   0x8000   // act as a light filter during q3map -light
+#define <a href="#SURF_*.SURF_ALPHASHADOW">SURF_ALPHASHADOW</a>   0x10000  // do per-pixel light shadow casting in q3map
+#define <a href="#SURF_*.SURF_NODLIGHT">SURF_NODLIGHT</a>      0x20000  // don't dlight even if solid (solid lava, skies)
+#define <a href="#SURF_*.SURF_DUST">SURF_DUST</a>          0x40000  // leave a dust trail when walking on this surface
+</pre><hr>
+
+
+<h3><a name="CONTENTS_*">CONTENTS_* constants</a></h3>
+<p>
+These constants indicate attributes for the &quot;insides&quot; or &quot;volume&quot; of a model (map, player, entity), such as a trigger.
+In contrast, the <tt>SURF_*</tt> constants describe the faces (surface) of a model.
+XXX: significance in bounding boxes?
+
+
+<hr><pre>
+#define <a href="#CONTENTS_*.CONTENTS_SOLID">CONTENTS_SOLID</a>          1       // an eye is never valid in a solid
+#define <a href="#CONTENTS_*.CONTENTS_LAVA">CONTENTS_LAVA</a>           8
+#define <a href="#CONTENTS_*.CONTENTS_SLIME">CONTENTS_SLIME</a>          16
+#define <a href="#CONTENTS_*.CONTENTS_WATER">CONTENTS_WATER</a>          32
+#define <a href="#CONTENTS_*.CONTENTS_FOG">CONTENTS_FOG</a>            64
+
+#define <a href="#CONTENTS_*.CONTENTS_AREAPORTAL">CONTENTS_AREAPORTAL</a>     0x8000
+
+#define <a href="#CONTENTS_*.CONTENTS_PLAYERCLIP">CONTENTS_PLAYERCLIP</a>     0x10000
+#define <a href="#CONTENTS_*.CONTENTS_MONSTERCLIP">CONTENTS_MONSTERCLIP</a>    0x20000
+//bot specific contents types
+#define <a href="#CONTENTS_*.CONTENTS_TELEPORTER">CONTENTS_TELEPORTER</a>     0x40000
+#define <a href="#CONTENTS_*.CONTENTS_JUMPPAD">CONTENTS_JUMPPAD</a>        0x80000
+#define <a href="#CONTENTS_*.CONTENTS_CLUSTERPORTAL">CONTENTS_CLUSTERPORTAL</a>  0x100000
+#define <a href="#CONTENTS_*.CONTENTS_DONOTENTER">CONTENTS_DONOTENTER</a>     0x200000
+#define <a href="#CONTENTS_*.CONTENTS_BOTCLIP">CONTENTS_BOTCLIP</a>        0x400000
+#define <a href="#CONTENTS_*.CONTENTS_MOVER">CONTENTS_MOVER</a>          0x800000
+
+#define <a href="#CONTENTS_*.CONTENTS_ORIGIN">CONTENTS_ORIGIN</a>         0x1000000   // removed before bsping an entity
+
+#define <a href="#CONTENTS_*.CONTENTS_BODY">CONTENTS_BODY</a>           0x2000000   // should never be on a brush, only in game
+#define <a href="#CONTENTS_*.CONTENTS_CORPSE">CONTENTS_CORPSE</a>         0x4000000
+#define <a href="#CONTENTS_*.CONTENTS_DETAIL">CONTENTS_DETAIL</a>         0x8000000   // brushes not used for the bsp
+#define <a href="#CONTENTS_*.CONTENTS_STRUCTURAL">CONTENTS_STRUCTURAL</a>     0x10000000  // brushes used for the bsp
+#define <a href="#CONTENTS_*.CONTENTS_TRANSLUCENT">CONTENTS_TRANSLUCENT</a>    0x20000000  // don't consume surface fragments inside
+#define <a href="#CONTENTS_*.CONTENTS_TRIGGER">CONTENTS_TRIGGER</a>        0x40000000
+#define <a href="#CONTENTS_*.CONTENTS_NODROP">CONTENTS_NODROP</a>         0x80000000  // don't leave bodies or items (death fog, lava)
+</pre><hr>
+
+
+<h3><a name="playerState_t">struct playerState_t</a></h3>
+<p>
+One copy of this data type resides on the client side for client purposes, and another copy resides on the server for the &quot;true&quot; data.
+This data type is transmitted over network to a player describing his/her/its state according to the server, that is, the player's &quot;actual state&quot;.
+No other player receives the playerState_t of another player.
+The server constantly sends these playerState_t packets to their respective players.
+In a network multiplayer game, the nature of the network introduces delays (ping lag) in the packets.
+As a result, the client side may utilize movement prediction upon its local copy of the playerState_t information to present a smoother view to the gamer, while waiting for the &quot;true&quot; server's information to arrive.
+When the server's packet arrives, the client game then attempts to resolve the predicted playerState_t information with the received server's playerState_t information.
+
+
+<p>
+<hr><pre>
+typedef struct playerState_s {
+    int         <a href="#playerState_t.commandTime">commandTime</a>;    // cmd->serverTime of last executed command
+    int         <a href="#playerState_t.pm_type">pm_type</a>;
+    int         <a href="#playerState_t.bobCycle">bobCycle</a>;       // for view bobbing and footstep generation
+    int         <a href="#playerState_t.pm_flags">pm_flags</a>;       // ducked, jump_held, etc
+    int         <a href="#playerState_t.pm_time">pm_time</a>;
+
+    vec3_t      <a href="#playerState_t.origin">origin</a>;
+    vec3_t      <a href="#playerState_t.velocity">velocity</a>;
+    int         <a href="#playerState_t.weaponTime">weaponTime</a>;
+    int         <a href="#playerState_t.gravity">gravity</a>;
+    int         <a href="#playerState_t.speed">speed</a>;
+    int         <a href="#playerState_t.delta_angles[3]">delta_angles[3]</a>;    // add to command angles to get view direction
+                                    // changed by spawns, rotating objects, and teleporters
+
+    int         <a href="#playerState_t.groundEntityNum">groundEntityNum</a>;// ENTITYNUM_NONE = in air
+
+    int         <a href="#playerState_t.legsTimer">legsTimer</a>;      // don't change low priority animations until this runs out
+    int         <a href="#playerState_t.legsAnim">legsAnim</a>;       // mask off ANIM_TOGGLEBIT
+
+    int         <a href="#playerState_t.torsoTimer">torsoTimer</a>;     // don't change low priority animations until this runs out
+    int         <a href="#playerState_t.torsoAnim">torsoAnim</a>;      // mask off ANIM_TOGGLEBIT
+
+    int         <a href="#playerState_t.movementDir">movementDir</a>;    // a number 0 to 7 that represents the reletive angle
+                                // of movement to the view angle (axial and diagonals)
+                                // when at rest, the value will remain unchanged
+                                // used to twist the legs during strafing
+
+    vec3_t      <a href="#playerState_t.grapplePoint">grapplePoint</a>;   // location of grapple to pull towards if PMF_GRAPPLE_PULL
+
+    int         <a href="#playerState_t.eFlags">eFlags</a>;         // copied to entityState_t->eFlags
+
+    int         <a href="#playerState_t.eventSequence">eventSequence</a>;  // pmove generated events
+    int         <a href="#playerState_t.events[MAX_PS_EVENTS]">events[MAX_PS_EVENTS]</a>;
+    int         <a href="#playerState_t.eventParms[MAX_PS_EVENTS]">eventParms[MAX_PS_EVENTS]</a>;
+
+    int         <a href="#playerState_t.externalEvent">externalEvent</a>;  // events set on player from another source
+    int         <a href="#playerState_t.externalEventParm">externalEventParm</a>;
+    int         <a href="#playerState_t.externalEventTime">externalEventTime</a>;
+
+    int         <a href="#playerState_t.clientNum">clientNum</a>;      // ranges from 0 to MAX_CLIENTS-1
+    int         <a href="#playerState_t.weapon">weapon</a>;         // copied to entityState_t->weapon
+    int         <a href="#playerState_t.weaponstate">weaponstate</a>;
+
+    vec3_t      <a href="#playerState_t.viewangles">viewangles</a>;     // for fixed views
+    int         <a href="#playerState_t.viewheight">viewheight</a>;
+
+    // damage feedback
+    int         <a href="#playerState_t.damageEvent">damageEvent</a>;    // when it changes, latch the other parms
+    int         <a href="#playerState_t.damageYaw">damageYaw</a>;
+    int         <a href="#playerState_t.damagePitch">damagePitch</a>;
+    int         <a href="#playerState_t.damageCount">damageCount</a>;
+
+    int         <a href="#playerState_t.stats[MAX_STATS]">stats[MAX_STATS]</a>;
+    int         <a href="#playerState_t.persistant[MAX_PERSISTANT]">persistant[MAX_PERSISTANT]</a>; // stats that aren't cleared on deat
+h
+    int         <a href="#playerState_t.powerups[MAX_POWERUPS]">powerups[MAX_POWERUPS]</a>; // level.time that the powerup runs out
+    int         <a href="#playerState_t.ammo[MAX_WEAPONS]">ammo[MAX_WEAPONS]</a>;
+
+    int         <a href="#playerState_t.generic1">generic1</a>;
+    int         <a href="#playerState_t.loopSound">loopSound</a>;
+    int         <a href="#playerState_t.jumppad_ent">jumppad_ent</a>;    // jumppad entity hit this frame
+
+    // not communicated over the net at all
+    int         <a href="#playerState_t.ping">ping</a>;           // server to game info for scoreboard
+    int         <a href="#playerState_t.pmove_framecount">pmove_framecount</a>;   // FIXME: don't transmit over the network
+    int         <a href="#playerState_t.jumppad_frame">jumppad_frame</a>;
+    int         <a href="#playerState_t.entityEventSequence">entityEventSequence</a>;
+} playerState_t;
+
+</pre><hr>
+<dl>
+<dt><a name="playerState_t.commandTime">commandTime</a></dt><dd>Server timestamp.
+Due to the nature of UDP/IP (network protocol used by Q3A), packets may arrive out of order.
+Timestamping assists in sorting out the packets.
+Also, it gives the client a very good idea of how much game time has passed.
+(XXX: what is the epoch?  Server start?  Game start?  OS time?)
+</dd>
+<dt><a name="playerState_t.pm_type">pm_type</a></dt><dd>
+A predictable movement type.
+This helps the client predict what kind of motions would be allowed;
+on the server side, this dictates what kinds of motions are allowed.
+See also <a href="#PM_*">PM_*</a>.
+</dd>
+<dt><a name="playerState_t.bobCycle">bobCycle</a></dt><dd>
+Used for timing footsteps sounds.
+</dd>
+<dt><a name="playerState_t.pm_flags">pm_flags</a></dt><dd>
+Bitmask flags for movement calculations (predictions on client-side).
+See also <a href="#PMF_*">PMF_*</a>.
+</dd>
+<dt><a name="playerState_t.pm_time">pm_time</a></dt><dd>
+An associated time value for movement calculations (predictions on client-side).
+</dd>
+<dt><a name="playerState_t.origin">origin</a></dt><dd>Vector describing the player's position in the game world.</dd>
+<dt><a name="playerState_t.velocity">velocity</a></dt><dd>Vector describing the player's instant velocity in the game world.</dd>
+<dt><a name="playerState_t.weaponTime">weaponTime</a></dt><dd>Number of milliseconds to pass before <a href="#playerState_t.weaponstate">weaponstate</a> may change.  Reduced per game frame, <a href="#playerState_t.weaponstate">weaponstate</a> changes when weaponTime reaches 0.  (XXX: mention the state-transitioning function)</dd>
+<dt><a name="playerState_t.gravity">gravity</a></dt><dd>
+Gravity effect upon the player.
+While the initial value is retrieved from cvar <var>g_gravity</var>, this field can be assigned a different value for some kind of &quot;individual gravity force&quot; effect.
+On the client side, this is used to predict gravity-induced acceleration.
+</dd>
+<dt><a name="playerState_t.speed">speed</a></dt><dd>
+Player's running speed.
+XXX: that was helpful...
+</dd>
+<dt><a name="playerState_t.delta_angles[3]">delta_angles[3]</a></dt><dd>If the server had to force a change in viewing angle for some reason (teleporter, respawning, etc.), this field indicates the amount of adjustment to the client's reported viewangle.
+This means, should the server not require adjusting the view angle, this field remains zeroed out as &lt; 0, 0, 0 &gt;.</dd>
+<dt><a name="playerState_t.groundEntityNum">groundEntityNum</a></dt><dd>Entity number of whatever the player is standing upon.
+<tt>ENTITY_NONE</tt> if not standing (airborne, swimming).</dd>
+<dt><a name="playerState_t.legsTimer">legsTimer</a></dt><dd>
+Time remaining in current leg animation frame.
+</dd>
+<dt><a name="playerState_t.legsAnim">legsAnim</a></dt><dd>
+Current leg animation frame number.
+</dd>
+<dt><a name="playerState_t.torsoTimer">torsoTimer</a></dt><dd>
+Time remaining in current torso animation frame.
+</dd>
+<dt><a name="playerState_t.torsoAnim">torsoAnim</a></dt><dd>
+Current torso animation frame number.
+</dd>
+<dt><a name="playerState_t.movementDir">movementDir</a></dt><dd>
+Something about rotating the legs relative to the face for the strafe motions.
+(PM_SetMovementDir())
+</dd>
+<dt><a name="playerState_t.grapplePoint">grapplePoint</a></dt><dd>Vector describing the position of the latched grappling hook pulling the player.</dd>
+<dt><a name="playerState_t.eFlags">eFlags</a></dt><dd>Entity flags.
+The <a href="#EF_*">EF_*</a> constants.
+</dd>
+<dt><a name="playerState_t.eventSequence">eventSequence</a></dt><dd>
+Offset into <a href="#playerState_t.events[MAX_PS_EVENTS]">events[MAX_PS_EVENTS]</a> and <a href="#playerState_t.eventParms[MAX_PS_EVENTS]">eventParms[MAX_PS_EVENTS]</a>...
+(XXX: next to be used, just used?)
+</dd>
+<dt><a name="playerState_t.events[MAX_PS_EVENTS]">events[MAX_PS_EVENTS]</a></dt><dd>
+Array of <tt>MAX_PS_EVENTS</tt> (2) elements to hold predictable events generated by the player (???).
+</dd>
+<dt><a name="playerState_t.eventParms[MAX_PS_EVENTS]">eventParms[MAX_PS_EVENTS]</a></dt><dd>
+Array of <tt>MAX_PS_EVENTS</tt> (2) elements to hold parameters to the events in <a href="#playerState_t.events[MAX_PS_EVENTS]">events[MAX_PS_EVENTS]</a>.
+</dd>
+<dt><a name="playerState_t.externalEvent">externalEvent</a></dt><dd>???</dd>
+<dt><a name="playerState_t.externalEventParm">externalEventParm</a></dt><dd>???</dd>
+<dt><a name="playerState_t.externalEventTime">externalEventTime</a></dt><dd>???</dd>
+<dt><a name="playerState_t.clientNum">clientNum</a></dt><dd>Client number of the player.  Ranges from 0 to <tt>MAX_CLIENTS</tt> (63).</dd>
+<dt><a name="playerState_t.weapon">weapon</a></dt><dd>Currently wielded weapon.  Server uses this field to tell the client what weapon is actually in use.  The client requests a change of weapon with the <var>weapon</var> field of a usercmd_t packet.</dd>
+<dt><a name="playerState_t.weaponstate">weaponstate</a></dt><dd>State of the weapon: <tt>WEAPON_READY</tt>, <tt>WEAPON_FIRING</tt>, <tt>WEAPON_RELOADING</tt>, <tt>WEAPON_DROPPING</tt>, <tt>WEAPON_RAISING</tt>.</dd>
+<dt><a name="playerState_t.viewangles">viewangles</a></dt><dd>???</dd>
+<dt><a name="playerState_t.viewheight">viewheight</a></dt><dd>???</dd>
+<dt><a name="playerState_t.damageEvent">damageEvent</a></dt><dd>
+Incremented each time player takes damage.
+(XXX: seems silly to track this.  Maybe more significance in cgame?)
+</dd>
+<dt><a name="playerState_t.damageYaw">damageYaw</a></dt><dd>Viewing direction (left/right component) from which the player got hit.</dd>
+<dt><a name="playerState_t.damagePitch">damagePitch</a></dt><dd>Viewing direction (up/down component) from which the player got hit.</dd>
+<dt><a name="playerState_t.damageCount">damageCount</a></dt><dd>
+Damage amount (hitpoints).
+</dd>
+<dt><a name="playerState_t.stats[MAX_STATS]">stats[MAX_STATS]</a></dt><dd>Array of <tt>MAX_STATS</tt> (16) elements of <tt>STAT_*</tt> fields.
+See also <a href="#STAT_*">STAT_*</a>.
+</dd>
+<dt><a name="playerState_t.persistant[MAX_PERSISTANT]">persistant[MAX_PERSISTANT]</a></dt><dd>Array of <tt>MAX_PERSISTANT</tt> (16) elemets of <tt>PERS_*</tt> fields.
+See also <a href="#PERS_*">PERS_*</a>.
+</dd>
+<dt><a name="playerState_t.powerups[MAX_POWERUPS]">powerups[MAX_POWERUPS]</a></dt><dd>Array of <tt>MAX_POWERUPS</tt> (16) elements of <tt>PW_*</tt> fields.
+See also <a href="#PW_*">PW_*</a>.
+</dd>
+<dt><a name="playerState_t.ammo[MAX_WEAPONS]">ammo[MAX_WEAPONS]</a></dt><dd>Array of <tt>MAX_WEAPONS</tt> (16) elements of ammo counts.
+Each element corresponds to one ammo type: (undefined), gauntlet, bullets, shells, grenades, rockets, lightning, railslugs, cells, bfg.
+Each ammo type corresponds to one weapon type in baesq3.
+See also <a href="#WP_*">WP_*</a>.
+</dd>
+<dt><a name="playerState_t.generic1">generic1</a></dt><dd>
+For Q3TA harvester game, number of thingies (cubes?) you're carrying?
+</dd>
+<dt><a name="playerState_t.loopSound">loopSound</a></dt><dd>Sound index into <tt>CS_SOUNDS</tt> configstring to play in a loop. XXX</dd>
+<dt><a name="playerState_t.jumppad_ent">jumppad_ent</a></dt><dd>???</dd>
+<dt><a name="playerState_t.ping">ping</a></dt><dd>ping value?  Is this even sent over the network?</dd>
+<dt><a name="playerState_t.pmove_framecount">pmove_framecount</a></dt><dd>???</dd>
+<dt><a name="playerState_t.jumppad_frame">jumppad_frame</a></dt><dd>???</dd>
+<dt><a name="playerState_t.entityEventSequence">entityEventSequence</a></dt><dd>???</dd>
+</dl>
+
+<h3><a name="PM_*">PM_* constants</a></h3>
+<p>
+Predictable movement types.
+Determines what types of movements are allowed and how to react to user movement input.
+Constants listed for context for <a href="#playerState_t.pm_type">playerState_t.pm_type</a>.
+
+
+<p>
+<hr><pre>
+typedef enum {
+    PM_NORMAL,      // can accelerate and turn
+    PM_NOCLIP,      // noclip movement
+    PM_SPECTATOR,   // still run into walls
+    PM_DEAD,        // no acceleration or turning, but free falling
+    PM_FREEZE,      // stuck in place with no control
+    PM_INTERMISSION,    // no movement or status bar
+    PM_SPINTERMISSION   // no movement or status bar
+} pmtype_t;
+</pre><hr>
+<dl>
+<dt><a name="PM_*."></a></dt><dd></dd>
+</dl>
+
+<h3><a name="PMF_*">PMF_* constants</a></h3>
+<p>
+Predictable movement flags.
+Various bitmasks to indicate additional movement prediction parameters.
+Listed here for context for <a href="#playerState_t.pm_flags">playerState_t.pm_flags</a>.
+
+
+<p>
+<hr><pre>
+// pmove->pm_flags
+#define PMF_DUCKED          0x0001 //1
+#define PMF_JUMP_HELD       0x0002 //2
+//                            0x0004 //4
+#define PMF_BACKWARDS_JUMP  0x0008 //8      // go into backwards land
+#define PMF_BACKWARDS_RUN   0x0010 //16     // coast down to backwards run
+#define PMF_TIME_LAND       0x0020 //32     // pm_time is time before rejump
+#define PMF_TIME_KNOCKBACK  0x0040 //64     // pm_time is an air-accelerate only time
+//                            0x0080 //128
+#define PMF_TIME_WATERJUMP  0x0100 //256        // pm_time is waterjump
+#define PMF_RESPAWNED       0x0200 //512        // clear after attack and jump buttons come up
+#define PMF_USE_ITEM_HELD   0x0400 //1024
+#define PMF_GRAPPLE_PULL    0x0800 //2048   // pull towards grapple location
+#define PMF_FOLLOW          0x1000 //4096   // spectate following another player
+#define PMF_SCOREBOARD      0x2000 //8192   // spectate as a scoreboard
+#define PMF_INVULEXPAND     0x4000 //16384  // invulnerability sphere set to full size
+
+#define PMF_ALL_TIMES   (PMF_TIME_WATERJUMP|PMF_TIME_LAND|PMF_TIME_KNOCKBACK)
+</pre><hr>
+<dl>
+<dt><a name="PMF_*."></a></dt><dd></dd>
+</dl>
+
+<h3><a name="STAT_*">STAT_* stats elements</a></h3>
+<p>
+Array of 16 elements.
+Each array element has a unique game module-defined meaning.
+Also, only the low 16 bits of each element is transmitted over network.
+(XXX: expanded to 32 bits since 1.31?)
+
+<p>
+Elements typically hold values the pertain to one particular life (i.e. until player is fragged).
+The game module zeroes out the entire stats[] array at each respawn (this action can be modified in the game module).
+
+
+<p>
+<hr><pre>
+// player_state->stats[] indexes
+// NOTE: may not have more than 16
+typedef enum {
+    <a href="#STAT_*.STAT_HEALTH">STAT_HEALTH</a>,
+    <a href="#STAT_*.STAT_HOLDABLE_ITEM">STAT_HOLDABLE_ITEM</a>,
+#ifdef MISSIONPACK
+    STAT_PERSISTANT_POWERUP,
+#endif
+    <a href="#STAT_*.STAT_WEAPONS">STAT_WEAPONS</a>,                   // 16 bit fields
+    <a href="#STAT_*.STAT_ARMOR">STAT_ARMOR</a>,
+    <a href="#STAT_*.STAT_DEAD_YAW">STAT_DEAD_YAW</a>,                  // look this direction when dead (FIXME: get
+ rid of?)
+    <a href="#STAT_*.STAT_CLIENTS_READY">STAT_CLIENTS_READY</a>,             // bit mask of clients wishing to exit the i
+ntermission (FIXME: configstring?)
+    <a href="#STAT_*.STAT_MAX_HEALTH">STAT_MAX_HEALTH</a>                 // health / armor limit, changable by handic
+ap
+} statIndex_t;
+</pre><hr>
+<dl>
+<dt><a name="STAT_*.STAT_HEALTH">STAT_HEALTH</a></dt><dd>
+0 - the player's health value.
+</dd>
+<dt><a name="STAT_*.STAT_HOLDABLE_ITEM">STAT_HOLDABLE_ITEM</a></dt><dd>
+1 - the holdable item (if any) that the player possesses.
+See also <a href="#HI_*">HI_*</a>.
+</dd>
+<dt><a name="STAT_*.STAT_WEAPONS">STAT_WEAPONS</a></dt><dd>
+2 - bitmask of weapons the player is carrying.
+</dd>
+<dt><a name="STAT_*.STAT_ARMOR">STAT_ARMOR</a></dt><dd>
+3 - player's armor value.
+</dd>
+<dt><a name="STAT_*.STAT_DEAD_YAW">STAT_DEAD_YAW</a></dt><dd>
+4 - um.  this is kinda weird.
+</dd>
+<dt><a name="STAT_*.STAT_CLIENTS_READY">STAT_CLIENTS_READY</a></dt><dd>
+5 - Bitmask of clients that are &quot;READY&quot;, at intermission. (XXX: obsoleted by a configstring?)
+</dd>
+<dt><a name="STAT_*.STAT_MAX_HEALTH">STAT_MAX_HEALTH</a></dt><dd>
+6 - Maximum health value.
+</dd>
+</dl>
+
+<h3><a name="HI_*">HI_* holdable items</a></h3>
+<p>
+Values for holdable items for <a href="#STAT_*.STAT_HOLDABLE_ITEM">STAT_HOLDABLE_ITEM</a>
+ element of <a href="#playerState_t.stats[MAX_STATS]">playerState_t.stats[MAX_STATS]</a> field of <a href="#playerState_t">playerState_t</a>.
+Holdable items are items a player may carry and optionally use (baseq3 uses +button2 to indicate item use).
+
+
+<p>
+<hr><pre>
+typedef enum {
+    <a href="#HI_*.HI_NONE">HI_NONE</a>,
+
+    <a href="#HI_*.HI_TELEPORTER">HI_TELEPORTER</a>,
+    <a href="#HI_*.HI_MEDKIT">HI_MEDKIT</a>,
+    <a href="#HI_*.HI_KAMIKAZE">HI_KAMIKAZE</a>,
+    <a href="#HI_*.HI_PORTAL">HI_PORTAL</a>,
+    <a href="#HI_*.HI_INVULNERABILITY">HI_INVULNERABILITY</a>,
+
+    HI_NUM_HOLDABLE
+} holdable_t;
+</pre><hr>
+<dl>
+<dt><a name="HI_*.HI_NONE">HI_NONE</a></dt><dd>
+0 - Dummy item, indicates no item.
+</dd>
+<dt><a name="HI_*.HI_TELEPORTER">HI_TELEPORTER</a></dt><dd>
+1 - Personal teleporter; upon use, player is transported to a random spawn location.
+</dd>
+<dt><a name="HI_*.HI_MEDKIT">HI_MEDKIT</a></dt><dd>
+2 - Medkit; upon use, player receives an instant health boost of 60, if at less than 100 health.
+The actual boost value is determined by the &quot;count&quot; field of the medkit's item description in bg_itemlist[].
+</dd>
+<dt><a name="HI_*.HI_KAMIKAZE">HI_KAMIKAZE</a></dt><dd>
+3 - Kamikaze; upon use, the item creates a huge explosion (not a huge wind, despite the name), killing the carrier and surrounding players.
+If the player is fragged, the item automatically detonates of its own accord after 5 seconds, unless the player's body is gibbed.
+</dd>
+<dt><a name="HI_*.HI_PORTAL">HI_PORTAL</a></dt><dd>
+4 - ???
+</dd>
+<dt><a name="HI_*.HI_INVULNERABILITY">HI_INVULNERABILITY</a></dt><dd>
+5 - Invulnerability; upon use, an invulnerability sphere surrounds the player, protecting the player from all damages, while the player may continue shooting at everyone else, but unable to move in any direction at all.
+The invulnerabilty is limited by a timer in the <a href="#PW_*.PW_INVULNERABILITY">PW_INVULNERABILITY</a> field of <a href="#playerState_t.powerups[MAX_POWERUPS]">playerState_t.powerups[MAX_POWERUPS]</a>.
+</dd>
+</dl>
+
+<h3><a name="PERS_*">PERS_* persistant elements</a></h3>
+<p>
+Array of 16 elements holding data that persists across deaths.
+Of particular note, baseq3 already uses 15 elements, leaving only one unused element for a mod.
+Still, the mod may change the purpose of any element except the first.
+
+
+<p>
+<hr><pre>
+// player_state->persistant[] indexes
+// these fields are the only part of player_state that isn't
+// cleared on respawn
+// NOTE: may not have more than 16
+typedef enum {
+    <a href="#PERS_*.PERS_SCORE">PERS_SCORE</a>,                     // !!! MUST NOT CHANGE, SERVER AND GAME BOTH REFERENCE !!!
+    <a href="#PERS_*.PERS_HITS">PERS_HITS</a>,                      // total points damage inflicted so damage beeps can sound on change
+    <a href="#PERS_*.PERS_RANK">PERS_RANK</a>,                      // player rank or team rank
+    <a href="#PERS_*.PERS_TEAM">PERS_TEAM</a>,                      // player team
+    <a href="#PERS_*.PERS_SPAWN_COUNT">PERS_SPAWN_COUNT</a>,               // incremented every respawn
+    <a href="#PERS_*.PERS_PLAYEREVENTS">PERS_PLAYEREVENTS</a>,              // 16 bits that can be flipped for events
+    <a href="#PERS_*.PERS_ATTACKER">PERS_ATTACKER</a>,                  // clientnum of last damage inflicter
+    <a href="#PERS_*.PERS_ATTACKEE_ARMOR">PERS_ATTACKEE_ARMOR</a>,            // health/armor of last person we attacked
+    <a href="#PERS_*.PERS_KILLED">PERS_KILLED</a>,                    // count of the number of times you died
+    // player awards tracking
+    <a href="#PERS_*.PERS_IMPRESSIVE_COUNT">PERS_IMPRESSIVE_COUNT</a>,          // two railgun hits in a row
+    <a href="#PERS_*.PERS_EXCELLENT_COUNT">PERS_EXCELLENT_COUNT</a>,           // two successive kills in a short amount of time
+    <a href="#PERS_*.PERS_DEFEND_COUNT">PERS_DEFEND_COUNT</a>,              // defend awards
+    <a href="#PERS_*.PERS_ASSIST_COUNT">PERS_ASSIST_COUNT</a>,              // assist awards
+    <a href="#PERS_*.PERS_GAUNTLET_FRAG_COUNT">PERS_GAUNTLET_FRAG_COUNT</a>,       // kills with the guantlet
+    <a href="#PERS_*.PERS_CAPTURES">PERS_CAPTURES</a>                   // captures
+} persEnum_t;
+</pre><hr>
+<dl>
+<dt><a name="PERS_*.PERS_SCORE">PERS_SCORE</a></dt><dd>
+0 - Player score.
+The Q3 engine also expects the first element to be the player score,
+thus the game module should not try to change the meaning of this element.
+This field is transmitted in server queries, for the "score" fields of players.
+</dd>
+<dt><a name="PERS_*.PERS_HITS">PERS_HITS</a></dt><dd>
+1
+</dd>
+<dt><a name="PERS_*.PERS_RANK">PERS_RANK</a></dt><dd>
+2
+</dd>
+<dt><a name="PERS_*.PERS_TEAM">PERS_TEAM</a></dt><dd>
+3
+</dd>
+<dt><a name="PERS_*.PERS_SPAWN_COUNT">PERS_SPAWN_COUNT</a></dt><dd>
+4
+</dd>
+<dt><a name="PERS_*.PERS_PLAYEREVENTS">PERS_PLAYEREVENTS</a></dt><dd>
+5
+XXX: what are the bits?
+</dd>
+<dt><a name="PERS_*.PERS_ATTACKER">PERS_ATTACKER</a></dt><dd>
+6
+</dd>
+<dt><a name="PERS_*.PERS_ATTACKEE_ARMOR">PERS_ATTACKEE_ARMOR</a></dt><dd>
+7
+</dd>
+<dt><a name="PERS_*.PERS_KILLED">PERS_KILLED</a></dt><dd>
+8
+</dd>
+<dt><a name="PERS_*.PERS_IMPRESSIVE_COUNT">PERS_IMPRESSIVE_COUNT</a></dt><dd>
+9
+</dd>
+<dt><a name="PERS_*.PERS_EXCELLENT_COUNT">PERS_EXCELLENT_COUNT</a></dt><dd>
+10
+</dd>
+<dt><a name="PERS_*.PERS_DEFEND_COUNT">PERS_DEFEND_COUNT</a></dt><dd>
+11
+</dd>
+<dt><a name="PERS_*.PERS_ASSIST_COUNT">PERS_ASSIST_COUNT</a></dt><dd>
+12
+</dd>
+<dt><a name="PERS_*.PERS_GAUNTLET_FRAG_COUNT">PERS_GAUNTLET_FRAG_COUNT</a></dt><dd>
+13
+</dd>
+<dt><a name="PERS_*.PERS_CAPTURES">PERS_CAPTURES</a></dt><dd>
+14
+</dd>
+</dl>
+
+<h3><a name="PW_*">PW_* powerups elements</a></h3>
+<p>
+Values for powerup items for <a href="#playerState_t.powerups[MAX_POWERUPS]">playerState_t.powerups[MAX_POWERUPS]</a> field of <a href="#playerState_t">playerState_t</a>.
+Powerups are effective for a limited time, and may be dropped (such as due to fragging) with a partial timer value left.
+
+
+<p>
+<hr><pre>
+// NOTE: may not have more than 16
+typedef enum {
+    <a href="#PW_*.PW_NONE">PW_NONE</a>,
+
+    <a href="#PW_*.PW_QUAD">PW_QUAD</a>,
+    <a href="#PW_*.PW_BATTLESUIT">PW_BATTLESUIT</a>,
+    <a href="#PW_*.PW_HASTE">PW_HASTE</a>,
+    <a href="#PW_*.PW_INVIS">PW_INVIS</a>,
+    <a href="#PW_*.PW_REGEN">PW_REGEN</a>,
+    <a href="#PW_*.PW_FLIGHT">PW_FLIGHT</a>,
+
+    <a href="#PW_*.PW_REDFLAG">PW_REDFLAG</a>,
+    <a href="#PW_*.PW_BLUEFLAG">PW_BLUEFLAG</a>,
+    <a href="#PW_*.PW_NEUTRALFLAG">PW_NEUTRALFLAG</a>,
+
+    <a href="#PW_*.PW_SCOUT">PW_SCOUT</a>,
+    <a href="#PW_*.PW_GUARD">PW_GUARD</a>,
+    <a href="#PW_*.PW_DOUBLER">PW_DOUBLER</a>,
+    <a href="#PW_*.PW_AMMOREGEN">PW_AMMOREGEN</a>,
+    <a href="#PW_*.PW_INVULNERABILITY">PW_INVULNERABILITY</a>,
+
+    PW_NUM_POWERUPS
+
+} powerup_t;
+</pre><hr>
+<dl>
+<dt><a name="PW_*.PW_NONE">PW_NONE</a></dt><dd>
+0 - Dummy powerup, indicating no powerup.
+</dd>
+<dt><a name="PW_*.PW_QUAD">PW_QUAD</a></dt><dd>
+1 - Quad damage; player weapons do extra damage according to cvar <var>g_quaddamage</var> (default 3).
+</dd>
+<dt><a name="PW_*.PW_BATTLESUIT">PW_BATTLESUIT</a></dt><dd>
+2 - Battle/Environment suit; protects player against splash and environment (lava, acid, drowning) damage.
+</dd>
+<dt><a name="PW_*.PW_HASTE">PW_HASTE</a></dt><dd>
+3 - Haste; player moves and fires 30% faster.
+If also Scout, Scout takes precedence (i.e. no speeding to 80%).
+</dd>
+<dt><a name="PW_*.PW_INVIS">PW_INVIS</a></dt><dd>
+4 - Invisibility; player appears almost invisible.
+</dd>
+<dt><a name="PW_*.PW_REGEN">PW_REGEN</a></dt><dd>
+5 - Regeneration; player continually regains health.
+</dd>
+<dt><a name="PW_*.PW_FLIGHT">PW_FLIGHT</a></dt><dd>
+6 - Flight; gravity does not affect player, who can in fact freely move up or down.
+</dd>
+<dt><a name="PW_*.PW_REDFLAG">PW_REDFLAG</a></dt><dd>
+7 - The red flag; player is carrying the red flag.
+</dd>
+<dt><a name="PW_*.PW_BLUEFLAG">PW_BLUEFLAG</a></dt><dd>
+8 - The blue flag; player is carrying the blue flag.
+</dd>
+<dt><a name="PW_*.PW_NEUTRALFLAG">PW_NEUTRALFLAG</a></dt><dd>
+9 - The white flag; player is carrying the white flag (one-flag CTF)
+</dd>
+<dt><a name="PW_*.PW_SCOUT">PW_SCOUT</a></dt><dd>
+10 - Scout (persistant powerup, Team Arena only); player moves and fires 50% faster.
+If player also has Haste, Scout takes precedence (i.e. no speeding to +80%).
+</dd>
+<dt><a name="PW_*.PW_GUARD">PW_GUARD</a></dt><dd>
+11 - Guard (non-expiring powerup, Team Arena only); player receives half damage.
+</dd>
+<dt><a name="PW_*.PW_DOUBLER">PW_DOUBLER</a></dt><dd>
+12 - Doubler (non-expiring powerup, Team Arena only); player weapons do double damage.
+</dd>
+<dt><a name="PW_*.PW_AMMOREGEN">PW_AMMOREGEN</a></dt><dd>
+13 - Ammo Regen (non-expiring powerup, Team Arena only); player ammo counts slowly increment.
+</dd>
+<dt><a name="PW_*.PW_INVULNERABILITY">PW_INVULNERABILITY</a></dt><dd>
+14 - Invulnerability (Team Arena only); expiration time for invulnerability sphere.
+Invulnerability is a <a href="#HI_*.HI_INVULNERABILITY">holdable item</a>; using the item sets this field as the invulnerability timer.
+</dd>
+</dl>
+
+<h3><a name="WP_*">WP_* weapons</a></h3>
+<p>
+These values indicate a weapon.
+The same values are also used as the index into <a href="#playerState_t.ammo[MAX_WEAPONS]">playerState_t.ammo[MAX_WEAPONS]</a> for the weapon's corresponding ammo count.
+
+
+<p>
+<hr><pre>
+typedef enum {
+    <a href="#WP_*.WP_NONE">WP_NONE</a>,
+
+    <a href="#WP_*.WP_GAUNTLET">WP_GAUNTLET</a>,
+    <a href="#WP_*.WP_MACHINEGUN">WP_MACHINEGUN</a>,
+    <a href="#WP_*.WP_SHOTGUN">WP_SHOTGUN</a>,
+    <a href="#WP_*.WP_GRENADE_LAUNCHER">WP_GRENADE_LAUNCHER</a>,
+    <a href="#WP_*.WP_ROCKET_LAUNCHER">WP_ROCKET_LAUNCHER</a>,
+    <a href="#WP_*.WP_LIGHTNING">WP_LIGHTNING</a>,
+    <a href="#WP_*.WP_RAILGUN">WP_RAILGUN</a>,
+    <a href="#WP_*.WP_PLASMAGUN">WP_PLASMAGUN</a>,
+    <a href="#WP_*.WP_BFG">WP_BFG</a>,
+    <a href="#WP_*.WP_GRAPPLING_HOOK">WP_GRAPPLING_HOOK</a>,
+#ifdef MISSIONPACK
+    <a href="#WP_*.WP_NAILGUN">WP_NAILGUN</a>,
+    <a href="#WP_*.WP_PROX_LAUNCHER">WP_PROX_LAUNCHER</a>,
+    <a href="#WP_*.WP_CHAINGUN">WP_CHAINGUN</a>,
+#endif
+
+    WP_NUM_WEAPONS
+} weapon_t;
+</pre><hr>
+<dl>
+<dt><a name="WP_*.WP_NONE">WP_NONE</a></dt><dd>
+0 - Dummy weapon, used to indicate no weapon.</dd>
+<dt><a name="WP_*.WP_GAUNTLET">WP_GAUNTLET</a></dt><dd>
+1 - Gauntlet.</dd>
+<dt><a name="WP_*.WP_MACHINEGUN">WP_MACHINEGUN</a></dt><dd>
+2 - Machine gun.</dd>
+<dt><a name="WP_*.WP_SHOTGUN">WP_SHOTGUN</a></dt><dd>
+3 - Shotgun.</dd>
+<dt><a name="WP_*.WP_GRENADE_LAUNCHER">WP_GRENADE_LAUNCHER</a></dt><dd>
+4 - Grenade Launcher.</dd>
+<dt><a name="WP_*.WP_ROCKET_LAUNCHER">WP_ROCKET_LAUNCHER</a></dt><dd>
+5 - Rocket Launcher.</dd>
+<dt><a name="WP_*.WP_LIGHTNING">WP_LIGHTNING</a></dt><dd>
+6 - Lightning Gun.</dd>
+<dt><a name="WP_*.WP_RAILGUN">WP_RAILGUN</a></dt><dd>
+7 - Railgun.</dd>
+<dt><a name="WP_*.WP_PLASMAGUN">WP_PLASMAGUN</a></dt><dd>
+8 - Plasma Gun.</dd>
+<dt><a name="WP_*.WP_BFG">WP_BFG</a></dt><dd>
+9 - BFG10000 (BFG10K).</dd>
+<dt><a name="WP_*.WP_GRAPPLING_HOOK">WP_GRAPPLING_HOOK</a></dt><dd>
+10 - Grappling hook.</dd>
+<dt><a name="WP_*.WP_NAILGUN">WP_NAILGUN</a></dt><dd>
+11 - Nail Gun (Team Arena only).</dd>
+<dt><a name="WP_*.WP_PROX_LAUNCHER">WP_PROX_LAUNCHER</a></dt><dd>
+12 - Proximity Mine Launcher (Team Arena only).</dd>
+<dt><a name="WP_*.WP_CHAINGUN">WP_CHAINGUN</a></dt><dd>
+13 - Chaingun (Team Arena only).</dd>
+</dl>
+
+<h3><a name="usercmd_t">struct usercmd_t</a></h3>
+<p>
+If you can imagine trying to compress the gamer's input into a simplified arcade joystick interface, you would have a good idea what usercmd_t is about.
+The usercmd_t packets travel only from client to server, and is the means by which the server determines the will of the player's avatar in the server's notion of the world.
+The size of usercmd_t is notably small.
+This helps to reduce the impact of ping lag, and also helps reduces the total amount of incoming network traffic for the server (all connected clients are sending a usercmd_t).
+
+<p>
+The construction and transmission of the usercmd_t data occurs inside the client-side Q3 engine, meaning the cgame module cannot directly fabricate the data.
+The cgame module may still indirectly alter the usercmd_t data by using the various game commands (e.g. "+forward", "+attack", "-gesture"), via <var>trap_SendConsoleCommand()</var>.
+
+
+<p>
+<hr><pre>
+// usercmd_t is sent to the server each client frame
+typedef struct usercmd_s {
+    int             <a href="#usercmd_t.serverTime">serverTime</a>;
+    int             <a href="#usercmd_t.angles[3]">angles[3]</a>;
+    int             <a href="#usercmd_t.buttons">buttons</a>;
+    byte            <a href="#usercmd_t.weapon">weapon</a>;           // weapon
+    signed char <a href="#usercmd_t.forwardmove">forwardmove</a>, <a href="#usercmd_t.rightmove">rightmove</a>, <a href="#usercmd_t.upmove">upmove</a>;
+} usercmd_t;
+</pre><hr>
+<dl>
+<dt><a name="usercmd_t.serverTime">serverTime</a></dt><dd>A timestamp.
+The nature of UDP/IP (the network protocol used by Q3) may wind up sending &quot;later&quot; packets sooner than &quot;earlier&quot; packets.
+Timestamping helps sort out this potential temporal mixup.
+The value written here by the client is based on the timestamp value the client last received in a <a href="#playerState_t">playerState_t</a> packet.
+To prevent &quot;time-shifting&quot; cheats, the server-side runs some primitive sanity checking on the timestamp (+/-500ms).
+<br>Network-transmitted: 32 bits.
+</dd>
+<dt><a name="usercmd_t.angles">angles</a></dt><dd>The view (and thus aiming) direction of the client.
+Since this value is reported as an absolute (rather than relative change with a rate cap, as with running), a client may snap towards any (other) direction instantly.
+<br>Network-transmitted: 32*3 bits?
+</dd>
+<dt><a name="usercmd_t.buttons">buttons</a></dt><dd>
+Bitmask of 16 bits reflectiong the <tt>BUTTON_*</tt> constants.
+These correspond to <tt>+button<i>N</i></tt> commands.
+The lowest bit (bit 0) corresponds to "+button0" (alias "+attack").
+With 16 bits, this relationship goes up to "+button15".
+A bit value of 1 indicates button is held (+button), and 0 indicates button is released (-button).
+<br>Network-transmitted: 16 bits.
+</dd>
+<dt><a name="usercmd_t.weapon">weapon</a></dt><dd>Indicates the weapon the client wishes to wield.
+This is the method by which the client informs the server of a weapon switch.
+If the new weapon choice is invalid for some reason (not in possession, value out of range, player is dead), the server can force a switch to another weapon (on the server side) and report back this change in a <a href="#playerState_t">playerState_t</a> packet.
+<br>Network-transmitted: 8 bits.
+</dd>
+<dt><a name="usercmd_t.forwardmove">forwardmove</a></dt><dd>
+??? Related to <tt>+forward</tt> and <tt>+back</tt>.
+<br>Network-transmitted: 8? bits.
+</dd>
+<dt><a name="usercmd_t.rightmove">rightmove</a></dt><dd>??? Related to <tt>+moveleft</tt> and <tt>+moveright</tt>.
+<br>Network-transmitted: 8? bits.
+</dd>
+<dt><a name="usercmd_t.upmove">upmove</a></dt><dd>??? Related to <tt>+moveup</tt> and <tt>+movedown</tt>.
+<br>Network-transmitted: 8? bits.
+</dd>
+</dl>
+
+<h3><a name="trajectory_t">struct trajectory_t</a></h3>
+<p>
+This data type holds information related to recording the movement of an entity as well as calculating the near-future position (prediction) of the entity.
+A &quot;trajectory model&quot; is selected, and the parameters to the model recorded in the struct.
+
+
+<p>
+<hr><pre>
+typedef struct {
+    trType_t    <a href="#trajectory_t.trType">trType</a>;
+    int     <a href="#trajectory_t.trTime">trTime</a>;
+    int     <a href="#trajectory_t.trDuration">trDuration</a>;         // if non 0, trTime + trDuration = stop time
+    vec3_t  <a href="#trajectory_t.trBase">trBase</a>;
+    vec3_t  <a href="#trajectory_t.trDelta">trDelta</a>;            // velocity, etc
+} trajectory_t;
+</pre><hr>
+<dl>
+<dt><a name="trajectory_t.trType">trType</a></dt><dd>Trajectory path model.
+See also <a href="#trType_t">trType_t</a>
+<br>Network-transmitted: 8 bits.
+</dd>
+<dt><a name="trajectory_t.trTime">trTime</a></dt><dd>Start time of this path model, in gametime milliseconds (ms).
+(tip: on server side, gametime milliseconds is stored in level.time)
+<br>Network-transmitted: 32 bits.
+</dd>
+<dt><a name="trajectory_t.trDuration">trDuration</a></dt><dd>How much elapsed time to spend in this path model, in milliseconds.
+Stop time is derived by adding trTime and trDuration.
+<br>Network-transmitted: 32 bits.
+</dd>
+<dt><a name="trajectory_t.trBase">trBase</a></dt><dd>Initial position at start time.
+<br>Network-transmitted: 32*3 bits.
+</dd>
+<dt><a name="trajectory_t.trDelta">trDelta</a></dt><dd>Vector describing the next frame of movement.
+<br>Network-transmitted: 32*3 bits.
+</dd>
+</dl>
+
+<h3><a name="trType_t">enum trType_t</a></h3>
+<p>
+Set of constants describing a trajectory model (predictable path).
+Most entities follow a movement pattern that is mostly predictable, until it collides with another entity.
+Even then, the effects of the collision tends to remain predictable (it explodes, it bounces, it stops, etc.).
+The server tells the client what movement pattern, or &quot;trajectory model&quot;, an entity is using, so that the client can make educated predictions.
+
+
+<p>
+<hr><pre>
+typedef enum {
+    <a href="#trType_t.TR_STATIONARY">TR_STATIONARY</a>,
+    <a href="#trType_t.TR_INTERPOLATE">TR_INTERPOLATE</a>,             // non-parametric, but interpolate between snapshots
+    <a href="#trType_t.TR_LINEAR">TR_LINEAR</a>,
+    <a href="#trType_t.TR_LINEAR_STOP">TR_LINEAR_STOP</a>,
+    <a href="#trType_t.TR_SINE">TR_SINE</a>,                    // value = base + sin( time / duration ) * delta
+    <a href="#trType_t.TR_GRAVITY">TR_GRAVITY</a>
+} trType_t;
+</pre><hr>
+<dl>
+<dt><a name="trType_t.TR_STATIONARY">TR_STATIONARY</a></dt><dd>No movement.
+The entity does not move, client-side prediction does not change position.</dd>
+<dt><a name="trType_t.TR_INTERPOLATE">TR_INTERPOLATE</a></dt><dd>
+Interpolated movement.
+Non-predictable, but client still figures out intermediate positions (interpolates) for smoother movement.
+</dd>
+<dt><a name="trType_t.TR_LINEAR">TR_LINEAR</a></dt><dd>Linear movement, as with rockets, plasma gun, and BFG10K.
+ <ul>
+ <li>trBase - Starting position used to predict location.</li>
+ <li>trTime - Time spent in movement.</li>
+ <li>trDelta - Velocity vector.</li>
+ </ul></dd>
+<dt><a name="trType_t.TR_LINEAR_STOP">TR_LINEAR_STOP</a></dt><dd>Linear movement with predictable stop time?</dd>
+<dt><a name="trType_t.TR_SINE">TR_SINE</a></dt><dd>Sinusoidal movement (sine wave).
+Movement occurs along trDelta; scalar multiplication of vector trDelta with sine values.
+ <ul>
+ <li>trBase - Starting position used to predict location.</li>
+ <li>trDuration - Time of one cycle; frequency component</li>
+ <li>trTime - Phase offset.</li>
+ <li>trDelta - Amplitude.</li>
+ </ul></dd>
+<dt><a name="trType_t.TR_GRAVITY">TR_GRAVITY</a></dt><dd>Gravity-influenced movement, as with grenades.
+Acceleration force is always straight down, with magnitude <tt>DEFAULT_GRAVITY</tt> (800) (defined in bg_public.h).
+ <ul>
+ <li>trBase - Starting position used to predict location.</li>
+ <li>trTime - Time spent in movement.</li>
+ <li>trDelta - Initial velocity used to predict location.</li>
+ </ul></dd>
+</dl>
+
+<h3><a name="entityState_t">struct entityState_t</a></h3>
+<p>
+All entities in the game has an associated entityState_t data.
+While the game may have up to <tt>MAX_GENTITIES</tt> (1024) of such data records, each client only receives the entityState_t information of entities within its PVS (Potential Visibility Set), as determined by the Q3 engine.
+Any client may receive the entityState_t information of any entity, including itself.
+This receiving is in contrast to <a href="#playerState_t">playerState_t</a> information, which is only sent to its respective client.
+
+<p>
+While the comments in the source say structure size does not matter, any changes to this struct in the game module source will have no effect unless the same changes are made in the Q3 engine source.
+As of the time of this writing, only a select few in the world have such access.
+
+
+<p>
+<hr><pre>
+// entityState_t is the information conveyed from the server
+// in an update message about entities that the client will
+// need to render in some way
+// Different eTypes may use the information in different ways
+// The messages are delta compressed, so it doesn't really matter if
+// the structure size is fairly large
+
+typedef struct entityState_s {
+    int     <a href="#entityState_t.number">number</a>;         // entity index
+    int     <a href="#entityState_t.eType">eType</a>;          // entityType_t
+    int     <a href="#entityState_t.eFlags">eFlags</a>;
+
+    <a href="#trajectory_t">trajectory_t</a>    <a href="#entityState_t.pos">pos</a>;    // for calculating position
+    <a href="#trajectory_t">trajectory_t</a>    <a href="#entityState_t.apos">apos</a>;   // for calculating angles
+
+    int     <a href="#entityState_t.time">time</a>;
+    int     <a href="#entityState_t.time2">time2</a>;
+
+    vec3_t  <a href="#entityState_t.origin">origin</a>;
+    vec3_t  <a href="#entityState_t.origin2">origin2</a>;
+
+    vec3_t  <a href="#entityState_t.angles">angles</a>;
+    vec3_t  <a href="#entityState_t.angles2">angles2</a>;
+
+    int     <a href="#entityState_t.otherEntityNum">otherEntityNum</a>; // shotgun sources, etc
+    int     <a href="#entityState_t.otherEntityNum2">otherEntityNum2</a>;
+
+    int     <a href="#entityState_t.groundEntityNum">groundEntityNum</a>;    // -1 = in air
+
+    int     <a href="#entityState_t.constantLight">constantLight</a>;  // r + (g<<8) + (b<<16) + (intensity<<24)
+    int     <a href="#entityState_t.loopSound">loopSound</a>;      // constantly loop this sound
+
+    int     <a href="#entityState_t.modelindex">modelindex</a>;
+    int     <a href="#entityState_t.modelindex2">modelindex2</a>;
+    int     <a href="#entityState_t.clientNum">clientNum</a>;      // 0 to (MAX_CLIENTS - 1), for players and corpses
+    int     <a href="#entityState_t.frame">frame</a>;
+
+    int     <a href="#entityState_t.solid">solid</a>;          // for client side prediction, trap_linkentity sets this properly
+
+    int     <a href="#entityState_t.event">event</a>;          // impulse events -- muzzle flashes, footsteps, etc
+    int     <a href="#entityState_t.eventParm">eventParm</a>;
+
+    // for players
+    int     <a href="#entityState_t.powerups">powerups</a>;       // bit flags
+    int     <a href="#entityState_t.weapon">weapon</a>;         // determines weapon and flash model, etc
+    int     <a href="#entityState_t.legsAnim">legsAnim</a>;       // mask off ANIM_TOGGLEBIT
+    int     <a href="#entityState_t.torsoAnim">torsoAnim</a>;      // mask off ANIM_TOGGLEBIT
+
+    int     <a href="#entityState_t.generic1">generic1</a>;
+} entityState_t;
+</pre><hr>
+<dl>
+<dt><a name="entityState_t.number">number</a></dt><dd>Entity number.  Value ranges from 0 through <tt>MAX_GENTITIES</tt>-1 (1023).
+<br>Network-transmitted: 10? bits.
+</dd>
+<dt><a name="entityState_t.eType">eType</a></dt><dd>Entity type.  See also <a href="#entityType_t">entityType_t</a>  <br>Network-transmitted: ? bits.</dd>
+<dt><a name="entityState_t.eFlags">eFlags</a></dt><dd>Entity flags, the <a href="#EF_*">EF_*</a> constants.
+<br>Network-transmitted: 19 bits.</dd>
+<dt><a name="entityState_t.pos">pos</a></dt><dd>Entity positional trajectory.  Used to predict movement.
+<br>Network-transmitted: See <a href="#trajectory_t">trajectory_t</a> bits.
+</dd>
+<dt><a name="entityState_t.apos">apos</a></dt><dd>Entity angular trajectory.  Used to predict rotation.
+<br>Network-transmitted: See <a href="#trajectory_t">trajectory_t</a> bits.
+</dd>
+<dt><a name="entityState_t.time">time</a></dt><dd>For score plums, the number (score) to display.
+<br>Network-transmitted: 32 bits.
+</dd>
+<dt><a name="entityState_t.time2">time2</a></dt><dd>(unused?)
+<br>Network-transmitted: 32 bits.
+</dd>
+<dt><a name="entityState_t.origin">origin</a></dt><dd>New calculated position?  Current location?
+<br>Network-transmitted: 32*3 bits.
+</dd>
+<dt><a name="entityState_t.origin2">origin2</a></dt><dd>
+Used by jumppads (XXX: for what?).
+For railtrail and laser(!), location of the gun-side of the beam (where the shooter was).
+For movers, the push velocity (for pushing around players).
+For shotgun blasts, used to create the scattered shots effect (deriving normal vector of impact).
+<br>Network-transmitted: 32*3 bits.
+</dd>
+<dt><a name="entityState_t.angles">angles</a></dt><dd>Current orientation/angle/view direction.
+<br>Network-transmitted: 32*3 bits.
+</dd>
+<dt><a name="entityState_t.angles2">angles2</a></dt><dd>
+For players, the movement direction.
+<br>Network-transmitted: 32*3 bits.
+</dd>
+<dt><a name="entityState_t.otherEntityNum">otherEntityNum</a></dt><dd>
+For missile impacts, indicates the victim (XXX: what's it used for afterwards?).
+For railtrails, whomever fired (XXX: what about clientNum?)
+For grappling hook... indicates owner?
+For some hit/explosion entities, the client that owns/caused the event (XXX: ???).
+For obituary events/entities, entity number of the killer.
+<br>Network-transmitted: 10 bits.
+</dd>
+<dt><a name="entityState_t.otherEntityNum2">otherEntityNum2</a></dt><dd>
+For obituary events/entities, entity number of the the dead player.
+The killer is recorded in otherEntityNum.
+<br>Network-transmitted: 10 bits.
+</dd>
+<dt><a name="entityState_t.groundEntityNum">groundEntityNum</a></dt><dd>Entity number that this entity is standing on.  <tt>ENTITY_NONE</tt> (1023) if airborne or swimming.  <tt>ENITITY_WORLD</tt> (1022) if standing on a map component (floor).
+<br>Network-transmitted: 10 bits.
+</dd>
+<dt><a name="entityState_t.constantLight">constantLight</a></dt><dd>
+For movers, a constantLight color, RGBA components encoded into 4 8-bit fields mashed into a 32-bit int.
+<br>Network-transmitted: 32 bits.
+</dd>
+<dt><a name="entityState_t.loopSound">loopSound</a></dt><dd>
+Sound index into <tt>CS_SOUNDS</tt> configstring to play in a loop.
+Used by movers (grinding or motor noise), missiles (rocket sound, BFG noise, proxmine ticking), speaker entities (which is supposed to play sound in a loop), and players unfortunate enough to have a very attached proxmine.
+<br>Network-transmitted: 8 bits.
+</dd>
+<dt><a name="entityState_t.modelindex">modelindex</a></dt><dd>
+For items, item type code.
+Teleport-effect models, model index number.
+Model (misc_model) entities, model index number.
+Also used in single player to indicate the victory podium model at end of round.
+<br>Network-transmitted: 8 bits.
+</dd><dt><a name="entityState_t.modelindex2">modelindex2</a></dt><dd>This field is a little whacky.
+For CTF flags, a non-zero value means a flag that was dropped (after fragging), whereas zero means the flag sitting at its flagstand.
+For items, non-zero value indicates an item dropped by a player (such as a hypothetical "drop" command), whereas zero means a world-spawned item (such as those placed by the mapper).
+For movers, specifies the model (XXX: by index into configstrings?) to draw/render, but clip brushes are still preserved (XXX: is modelindex used?).
+For obelisks (something to do with a Team Arena game mode, but wtf is it?), the obelisk's health value.
+<br>Network-transmitted: 8 bits.
+</dd><dt><a name="entityState_t.clientNum">clientNum</a></dt><dd>Associated client number. XXX: and if not cliented?
+<br>Network-transmitted: 8 bits.
+</dd>
+<dt><a name="entityState_t.frame">frame</a></dt><dd>
+For portals, rotating speed (???).
+For obelisks, something about whether it's dying or something.
+<br>Network-transmitted: 16 bits.
+</dd>
+<dt><a name="entityState_t.solid">solid</a></dt><dd>
+Automagically set by Q3 engine upon a call to <var>trap_LinkEntity()</var>.
+Of special note: the special value SOLID_BMODEL (0xffffff) indicates a special inline model number (I have no idea what this means).
+<br>Network-transmitted: 24 bits.
+</dd>
+<dt><a name="entityState_t.event">event</a></dt><dd>For temporary-event entities, the event type code. XXX: describe/list events.
+<br>Network-transmitted: 10 bits.
+</dd>
+<dt><a name="entityState_t.eventParm">eventParm</a></dt><dd>For temporary-event entities, a parameter for the event (such as type of explosion or a sound index number).
+<br>Network-transmitted: 8 bits.
+</dd>
+<dt><a name="entityState_t.powerups">powerups</a></dt><dd>Bitmask of powerups?
+<br>Network-transmitted: 16 bits.
+</dd>
+<dt><a name="entityState_t.weapon">weapon</a></dt><dd>Associated weapon.
+For players, this is the weapon in hand.
+For obituaries, this is the weapon that inflicted death.
+<br>Network-transmitted: 8 bits.
+</dd>
+<dt><a name="entityState_t.legsAnim">legsAnim</a></dt><dd>Animation frame counter for legs.  The high bit (ANIM_TOGGLEBIT) is toggled each time leg animation has changed, thus needs to be masked out (giving you 7 bits with which to play).
+<br>Network-transmitted: 8 bits.
+</dd>
+<dt><a name="entityState_t.torsoAnim">torsoAnim</a></dt><dd>Animation frame counter for torso.  The high bit (ANIM_TOGGLEBIT) is toggled each time torso animation has changed, thus needs to be masked out (gives you 7 bits with which to play).
+<br>Network-transmitted: 8 bits.
+</dd>
+<dt><a name="entityState_t.generic1">generic1</a></dt><dd>
+For persistant powerups, bitmask flag for teams allowed to pick up this item.
+For proximity mines, something about not being triggered by teammates (same bitmasks as for persistant powerups?)?
+For players, in harvester mode, the number of thingies (cubes?) the player is carrying;
+while this is the same value as in <a href="#playerState_t.generic1">playerState_t.generic1</a>,
+a <a href="#playerState_t">playerState_t</a> is transmitted only to its associated client,
+and an <a href="#entityState_t">entityState_t</a> is transmitted to anyone else;
+this replication permits other players to see how many whatitcalleds any other player has harvested.
+<br>Network-transmitted: 8 bits.
+</dd>
+</dl>
+
+<h3><a name="entityType_t">enum entityType_t</a></h3>
+<p>
+Entity type code.
+By using such a code, the server assists the client to prepare for rendering.
+Also, the various fields of <a href="#entityState_t">entityState_t</a> may take on different meanings for each entity type, which allows for a very hackish form of inherited objects.
+Or a very complicated union.
+
+<p>
+These constants are actually defined in <tt>bg_public.h</tt>, and so the game module may redefine these constants without restriction.
+The values from baseq3 are presented here to provide a context to <a href="#entityState_t.eType">entityState_t.eType</a>.
+
+
+<p>
+<hr><pre>
+typedef enum {
+    ET_GENERAL,
+    ET_PLAYER,
+    ET_ITEM,
+    ET_MISSILE,
+    ET_MOVER,
+    ET_BEAM,
+    ET_PORTAL,
+    ET_SPEAKER,
+    ET_PUSH_TRIGGER,
+    ET_TELEPORT_TRIGGER,
+    ET_INVISIBLE,
+    ET_GRAPPLE,             // grapple hooked on wall
+    ET_TEAM,
+
+    ET_EVENTS               // any of the EV_* events can be added freestanding
+                            // by setting eType to ET_EVENTS + eventNum
+                            // this avoids having to set eFlags and eventNum
+} entityType_t;
+</pre><hr>
+
+
+<h3><a name="EF_*">EF_* constants</a></h3>
+<p>
+Entity Flags -- various bitmask flags for an entity.
+As with <a href="#entityType_t">entityType_t</a>, these constants are also defined in <tt>bg_public.h</tt>, and are as redefinable.
+Placed here for contextual reference to <a href="#entityState_t.eFlags">entityState_t.eFlags</a>.
+
+
+<p>
+<hr><pre>
+#define EF_DEAD             0x00000001      // don't draw a foe marker over players with EF_DEAD
+#ifdef MISSIONPACK
+#define EF_TICKING          0x00000002      // used to make players play the prox mine ticking sound
+#endif
+#define EF_TELEPORT_BIT     0x00000004      // toggled every time the origin abruptly changes
+#define EF_AWARD_EXCELLENT  0x00000008      // draw an excellent sprite
+#define EF_BOUNCE           0x00000010      // for missiles
+#define EF_BOUNCE_HALF      0x00000020      // for missiles
+#define EF_AWARD_GAUNTLET   0x00000040      // draw a gauntlet sprite
+#define EF_NODRAW           0x00000080      // may have an event, but no model (unspawned items)
+#define EF_FIRING           0x00000100      // for lightning gun
+#define EF_KAMIKAZE         0x00000200
+#define EF_MOVER_STOP       0x00000400      // will push otherwise
+#define EF_AWARD_CAP        0x00000800      // draw the capture sprite
+#define EF_TALK             0x00001000      // draw a talk balloon
+#define EF_CONNECTION       0x00002000      // draw a connection trouble sprite
+#define EF_VOTED            0x00004000      // already cast a vote
+#define EF_AWARD_IMPRESSIVE 0x00008000      // draw an impressive sprite
+#define EF_AWARD_DEFEND     0x00010000      // draw a defend sprite
+#define EF_AWARD_ASSIST     0x00020000      // draw a assist sprite
+#define EF_AWARD_DENIED     0x00040000      // denied
+#define EF_TEAMVOTED        0x00080000      // already cast a team vote
+</pre><hr>
+
+
+<h3><a name="entityShared_t">struct entityShared_t</a></h3>
+<p>
+The entityShared_t struct is not transmitted over network.
+Still, it is memory space shared by the Q3 engine and game module for certain non-network activity that both the engine and the game module need simultaneous access.
+One such example is collision detection with trap_Trace().
+While the trap's code/contents/meat resides in the Q3 engine, information such as location and sizes of entities need to be available for reading and writing to both the Q3 engine (to detect collisions) and the game module (to move entities around).
+The entityShared_t struct fills this role of shared memory, while not being network-active.
+
+<p>
+Though the struct exists in VM memory, the Q3 engine has free reign of reading and writing these fields.
+Put another way, the values of these fields may at times appear to change &quot;magically&quot;.
+A suitable analogy is I/O ports in systems programming.
+
+
+<p>
+<hr><pre>
+typedef struct {
+    <a href="#entityState_t">entityState_t</a>   <a href="#entityShared_t.s">s</a>;              // communicated by server to clients
+
+    qboolean    <a href="#entityShared_t.linked">linked</a>;             // qfalse if not in any good cluster
+    int         <a href="#entityShared_t.linkcount">linkcount</a>;
+
+    int         <a href="#entityShared_t.svFlags">svFlags</a>;            // SVF_NOCLIENT, SVF_BROADCAST, etc
+    int         <a href="#entityShared_t.singleClient">singleClient</a>;       // only send to this client when SVF_SINGLECLIENT is set
+
+    qboolean    <a href="#entityShared_t.bmodel">bmodel</a>;             // if false, assume an explicit mins / maxs bounding box
+                                    // only set by trap_SetBrushModel
+    vec3_t      <a href="#entityShared_t.mins">mins</a>, <a href="#entityShared_t.maxs">maxs</a>;
+    int         <a href="#entityShared_t.contents">contents</a>;           // CONTENTS_TRIGGER, CONTENTS_SOLID, CONTENTS_BODY, etc
+                                    // a non-solid entity should set to 0
+
+    vec3_t      <a href="#entityShared_t.absmin">absmin</a>, <a href="#entityShared_t.absmax">absmax</a>;     // derived from mins/maxs and origin + rotation
+
+    // currentOrigin will be used for all collision detection and world linking.
+    // it will not necessarily be the same as the trajectory evaluation for the current
+    // time, because each entity must be moved one at a time after time is advanced
+    // to avoid simultanious collision issues
+    vec3_t      <a href="#entityShared_t.currentOrigin">currentOrigin</a>;
+    vec3_t      <a href="#entityShared_t.currentAngles">currentAngles</a>;
+
+    // when a trace call is made and passEntityNum != ENTITYNUM_NONE,
+    // an ent will be excluded from testing if:
+    // ent->s.number == passEntityNum   (don't interact with self)
+    // ent->s.ownerNum = passEntityNum  (don't interact with your own missiles)
+    // entity[ent->s.ownerNum].ownerNum = passEntityNum (don't interact with other missiles from owner)
+    int         <a href="#entityShared_t.ownerNum">ownerNum</a>;
+} entityShared_t;
+</pre><hr>
+<dl>
+<dt><a name="entityShared_t.s">s</a></dt><dd>Copy of <a href="#entityState_t">entityState_t</a> data?</dd>
+<dt><a name="entityShared_t.linked">linked</a></dt><dd>true or false, depending on whether entity is linked into the world or not (trap_LinkEntity()/trap_UnlinkEntity()).</dd>
+<dt><a name="entityShared_t.linkcount">linkcount</a></dt><dd>???</dd>
+<dt><a name="entityShared_t.svFlags">svFlags</a></dt><dd>Bitmask flags of special note to the Q3 engine server.
+The Q3 engine does not (and should not!) know the purpose of the other structs used by the game module.
+This field allows for the game module to specify special server/network actions on this entity.
+See also <a href="#SVF_*">SVF_*</a>.
+</dd>
+<dt><a name="entityShared_t.singleClient">singleClient</a></dt><dd>
+If svFlags has the <a href="#SVF_*.SVF_SINGLECLIENT"><tt>SVF_SINGLECLIENT</tt></a> bit set, this field indicates the sole recipient of update information for this entity.
+</dd>
+<dt><a name="entityShared_t.bmodel">bmodel</a></dt><dd>And if true, means the entity is part of the map (BSP Model).</dd>
+<dt><a name="entityShared_t.mins">mins</a></dt><dd>One corner of the &quot;regular&quot; bounding box.</dd>
+<dt><a name="entityShared_t.maxs">maxs</a></dt><dd>The other corner of the &quot;regular&quot; bounding box.</dd>
+<dt><a name="entityShared_t.contents">contents</a></dt><dd>Bitmask flags of <a href="#CONTENTS_*">CONTENTS_*</a> constants.</dd>
+<dt><a name="entityShared_t.absmin">absmin</a></dt><dd>Adjusted bounding box to compensate for box rotations.</dd>
+<dt><a name="entityShared_t.absmax">absmax</a></dt><dd>Adjusted bounding box to compensate for box rotations.</dd>
+<dt><a name="entityShared_t.currentOrigin">currentOrigin</a></dt><dd>The position used by trap_Trace() to calculate collisions.
+Trajectory calculations are still based on <a href="#entityState_t.pos">entityState_t.pos</a>.
+</dd>
+<dt><a name="entityShared_t.currentAngles">currentAngles</a></dt><dd>The view/aim direction used by traps.
+Trajectory still based on <a href="#entityState_t.apos">entityState_t.apos</a>.
+</dd>
+<dt><a name="entityShared_t.ownerNum">ownerNum</a></dt><dd>Owner number for this entity.</dd>
+</dl>
+
+<h3><a name="SVF_*">SVF_* constants</a></h3>
+<p>
+The PVS (Potential Visibility Set) of a location can be thought of as the set of <a href="#entityState_t">entityState_t</a> updates to properly predict events and entities within view from that location.
+The server flags fiddle with the set of <a href="#entityState_t">entityState_t</a> update information.
+
+
+<p>
+<hr><pre>
+/ entity->svFlags
+// the server does not know how to interpret most of the values
+// in entityStates (level eType), so the game must explicitly flag
+// special server behaviors
+#define SVF_NOCLIENT            0x00000001  // don't send entity to clients, even if it has effects
+#define SVF_BOT                 0x00000008  // set if the entity is a bot
+#define SVF_BROADCAST           0x00000020  // send to all connected clients
+#define SVF_PORTAL              0x00000040  // merge a second pvs at origin2 into snapshots
+#define SVF_USE_CURRENT_ORIGIN  0x00000080  // entity->r.currentOrigin instead of entity->s.origin
+                                            // for link position (missiles and movers)
+#define SVF_SINGLECLIENT        0x00000100  // only send to a single client
+</pre><hr>
+<dl>
+<dt><a name="SVF_*.SVF_NOCLIENT">SVF_NOCLIENT</a></dt><dd>
+The entity update information is not sent to anyone (<a href="#entityState_t">entityState_t</a> content remains network-inactive).
+</dd>
+<dt><a name="SVF_*.SVF_BOT">SVF_BOT</a></dt><dd>
+Marks this entity as a bot AI.
+</dd>
+<dt><a name="SVF_*.SVF_BROADCAST">SVF_BROADCAST</a></dt><dd>
+Send entity update information to all clients; insert into PVS of all clients.
+</dd>
+<dt><a name="SVF_*.SVF_PORTAL">SVF_PORTAL</a></dt><dd>
+Takes the PVS calculated from <a href="#entityState_t.origin2">entityState_t.origin2</a> and send that PVS information to this client, along with the original PVS.
+(I think.)
+In other words, the client can also see what the portal is seeing (remote camera effect).
+</dd>
+<dt><a name="SVF_*.SVF_USE_CURRENT_ORIGIN">SVF_USE_CURRENT_ORIGIN</a></dt><dd>
+Normally the PVS is calculated from <a href="#entityState_t.origin">entityState_t.origin</a>, but this flag changes the PVS calculation to use <a href="#entityShared_t.currentOrigin">entityShared_t.currentOrigin</a> instead.
+</dd>
+<dt><a name="SVF_*.SVF_SINGLECLIENT">SVF_SINGLECLIENT</a></dt><dd>
+Send this entity's update information to only one client, removing from the PVS of all other clients.
+The sole recipient of such information is indicated by <a href="#entityShared_t.singleClient">entityShared_t.singleClient</a>.
+</dd>
+</dl>
+
+<p>
+TODO: table of structs, their fields, and modability.
+
+
+
+
+<hr width="42%" align="left">
+<p>Created 2002.09.14. <br>
+Updated 2002.09.20 - plane information (djbob). <br>
+Updated 2003.11.10 - massive inject from cyrri. <br>
+Updated 2004.07.24 - spelling corrections, fixed syntax errors, grammar adjustments, more cross-reference links, added TOC. <br>
+Updated 2011.07.11 - change of contact e-mail. <br>
+<address>
+PhaethonH
+&lt; PhaethonH@gmail.com &gt;
+</address>
+</body>
+</html>

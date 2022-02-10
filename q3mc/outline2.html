@@ -1,0 +1,796 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<link rel="stylesheet" type="text/css" href="./outline1.css">
+<title>BASEQ3 Runthrough, Client-side</title>
+</head>
+<body>
+<h1>BASEQ3 Runthrough, Client-side</h1>
+
+<h2>Synopsis</h2><p>Illustration of an execution path through a Q3 cgame module (baseq3), from startup through gameplay though shutdown, for client-side mode, in outline form.</p>
+
+<div class="indented">
+<p>
+<strong>Motivation</strong>:
+Enhanced understanding of Q3A to assist in modding and total conversions.
+
+</div>
+<div class="indented">
+<p>
+<strong>Caveats</strong>:
+This document certainly is not a thorough understanding nor explanation of Q3.
+Information was gleaned by poring through the cgame source text, with minimal testing.
+Most of the statements made in this document are based on source comments and <q>gut feelings</q>.
+
+</div>
+<!-- template ripped from outline1  :) -->
+
+<h2><a name="engineStart">Engine Start</a></h2>
+<p>
+
+<h2><a name="vmMain">vmMain</a></h2>
+<p>
+See outline1.html regarding <var class="funcname">vmMain()</var>.
+Many descriptions of game's <var class="funcname">vmMain()</var> also applies to cgame module.
+
+
+
+<h3><a name="vmMain.overview">Overview: vmMain command/major cgame function</a></h3>
+<p>
+A quick overview of the vmMain commands (major cgame functions) in baseq3:
+<dl>
+<dt><a name="vmMain.CG_INIT">CG_INIT</a></dt><dd>
+When cgame starts (on a new map, level, connect, reconnect, etc.).
+</dd>
+<dt><a name="vmMain.CG_SHUTDOWN">CG_SHUTDOWN</a></dt><dd>
+Upon cgame shutdown (disconnecting, kicked, crash).
+</dd>
+<dt><a name="vmMain.CG_CONSOLE_COMMAND">CG_CONSOLE_COMMAND</a></dt><dd>
+A console command that the engine does not recognize.
+</dd>
+<dt><a name="vmMain.CG_DRAW_ACTIVE_FRAME">CG_DRAW_ACTIVE_FRAME</a></dt><dd>
+To draw stuff on the screen.
+</dd>
+<dt><a name="vmMain.CG_CROSSHAIR_PLAYER">CG_CROSSHAIR_PLAYER</a></dt><dd>
+<b class="xxx">XXX</b>: ???
+</dd>
+<dt><a name="vmMain.CG_LAST_ATTACKER">CG_LAST_ATTACKER</a></dt><dd>
+<b class="xxx">XXX</b>: ???
+</dd>
+<dt><a name="vmMain.CG_KEY_EVENT">CG_KEY_EVENT</a></dt><dd>
+When key-trapping is enabled, on a key event (press or release).
+</dd>
+<dt><a name="vmMain.CG_MOUSE_EVENT">CG_MOUSE_EVENT</a></dt><dd>
+When mouse-trapping is enabled, on a mouse event (movement, button press/release).
+</dd>
+<dt><a name="vmMain.CG_EVENT_HANDLING">CG_EVENT_HANDLING</a></dt><dd>
+<b class="xxx">XXX</b>: ???
+</dd>
+</dl>
+<p>
+The Q3 engine marshalls the necessary cgame function values and arguments, then makes the call to <var class="funcname">vmMain()</var>.
+Any additions or changes to these major cgame functions must be implemented in the engine and reflected in the cgame module (client-side mod).
+Only developers with access to the Q3 engine (not just mod) source may make such aditions or changes.
+Currently (2002 Aug) this consists of Id Software itself and its direct licensees (proprietary license).
+
+
+<h3><a name="CGAME_INIT">vmMain(CGAME_INIT, <var class="varname">serverMessageNum</var>, <var class="varname">serverCommandSequence</var>, <var class="varname">clientNum</var>)</a></h3>
+<p>
+Called when cgame module is initialized, upon connecting to a server (single-player game is a special case of a local server).
+The cgame is reloaded and reinitialized every time a new map is loaded.
+Three arguments:
+<dl>
+<dt><a name="vmMain.serverMessageNum">serverMessageNum</a></dt><dd>
+<b class="xxx">XXX</b>: ???
+</dd>
+<dt><a name="vmMain.serverCommandSequence">serverCommandSequence</a></dt><dd>
+<b class="xxx">XXX</b>: ???
+</dd>
+<dt><a name="vmMain.clientNum">clientNum</a></dt><dd>
+The cgame's client number as assigned by the server.
+</dd>
+</dl>
+<p>
+In baseq3, immediate branch to <var class="funcname">CG_Init()</var>.
+
+
+<h4><a name="CG_Init">CG_Init(serverMesssageNum, serverCommandSequence, clientNum)</a></h4>
+<p>
+<ol>
+<li>Zero out (clear) the structures <var class="varname">cgs</var>, <var class="varname">cg</var>, <var class="varname">cg_entities</var>, <var class="varname">cg_weapons</var>, <var class="varname">cg_items</var></li>
+<li>Record <var class="varname">clientNum</var> to <var class="varname">cg.clientNum</var></li>
+<li>Record <var class="varname">serverMessageNum</var> to <var class="varname">cgs.processedSnapshotNum</var></li>
+<li>Record <var class="varname">serverCommandSequence</var> to <var class="varname">cgs.serverCommandSequence</var></li>
+<li>Load some fonts and the plain-white shader</li>
+<li>Register some cvars -- <var class="funcname">CG_RegisterCvars()</var>.
+ <ol>
+ <li>For all elements of <var class="varname">cvarTable[]</var>, register the location of the <var class="typename">vmCvar_t</var> instance, the cvar name, the default value, and the cvar flags -- <var class="funcname">trap_Cvar_Register()</var></li>
+ <li>If also running a local server (non-dedicated host, single-player), record the fact into <var class="varname">cgs.localServer</var></li>
+ <li>Register cvar <q><span class="cvarname">modeL</span></q>, <q><span class="cvarname">headmodel</span></q>, <q><span class="cvarname">team_model</span></q>, <q><span class="cvarname">team_headmodel</span></q></li>
+ </ol></li><li>Initialize cgame console commands -- <var class="funcname">CG_InitConsoleCommands()</var>.
+ <ol>
+ <li>For all elements of <var class="varname">commands[]</var>, register the command string/name with the Q3 client engine for tab-completion -- trap_AddCommand()</li>
+ <li>Register a set of commands that can be tab-completed, but are interpreted on the server-side (e.g. <q><kbd class="command">kill</kbd></q> or <q><kbd class="command">say</kbd></q>)</li>
+ </ol></li><li>Switch/set weapon to machine gun</li>
+<li>CTF flags hackage for old-server compatibility (wtf?)</li>
+<li>Retrieve rendering configuration into <var class="varname">cgs.glconfig</var> -- <var class="funcname">trap_GetGlconfig()</var></li>
+<li>Set screen scale factors from <var class="varname">cgs.glconfig</var>: <var class="varname">cgs.screenXScale</var>, <var class="varname">cgs.screenYScale</var></li>
+<li>Retrieve gamestate from client system into <var class="varname">cgs.gameState</var> -- <var class="funcname">trap_GetGameState()</var></li>
+<li>Get game (mod) version and compare -- <var class="funcname">CG_ConfigString(CS_GAME_VERSIOn)</var></li>
+<li>Retrieve level start time into cgs.levelStartTime -- <var class="funcname">CG_ConfigString(CS_LEVEL_START_TIME)</var></li>
+<li>Parse server info -- <var class="funcname">CG_ParseServerinfo()</var>.
+ <ol>
+ <li>Retrieve ConfigString CS_<span class="configstring">SERVERINFO</span> into <var class="varname">info</var> -- <var class="funcname">CG_ConfigString(CS_SERVERINFO)</var></li>
+ <li>Retrieve values for keys <q><tt class="keyname">g_gametype</tt></q>, <q><tt class="keyname">dmflags</tt></q>, <q><tt class="keyname">teamflags</tt></q>, <q><tt class="keyname">fraglimit</tt></q>, <q><tt class="keyname">capturelimit</tt></q>, <q><tt class="keyname">timelimit</tt></q>, <q><tt class="keyname">sv_maxclients</tt></q>, <q><tt class="keyname">mapname</tt></q>, <q><tt class="keyname">g_redTeam</tt></q>, <q><tt class="keyname">g_blueTeam</tt></q></li>
+ </ol></li><li>Indicate cgame is loading the map -- <var class="funcname">CG_LoadingString()</var>.
+ <ol>
+ <li>Copy the message string to <var class="varname">cg.infoScreenText</var></li>
+ <li>update screen -- <var class="funcname">trap_UpdateScreen()</var></li>
+ </ol></li><li>Load map collision (and models?) -- <var class="funcname">trap_CM_LoadMap()</var></li>
+<li>Load sounds -- <var class="funcname">CG_RegisterSounds()</var>
+ <ol>
+ <li>Register a whole gank of sound files with <var class="funcname">trap_S_RegisterSound()</var> and store the returned handle into various <var class="varname">cgs.media.*</var> fields</li>
+ </ol></li><li>Load graphics -- <var class="funcname">CG_RegisterGraphics()</var>
+ <ol>
+ <li>Clear references to any old media</li>
+ <li>Display the mapname as the loading string</li>
+ <li>Load map (models and textures?) -- <var class="funcname">trap_R_LoadWorldMap()</var></li>
+ <li>Display <q>game media</q> as loading string</li>
+ <li>Register numerals font faces</li>
+ <li>Register a whole gank of media files, saving the returned handles into various <var class="varname">cgs.media.*</var> fields: <var class="funcname">trap_R_RegisterShader()</var>, <var class="funcname">trap_R_RegisterShaderNoMip()</var>, <var class="funcname">trap_R_RegisterModel()</var>, <var class="funcname">trap_R_RegisterSkin()</var></li>
+ <li>Register inline models</li>
+ <li>Register server-specified models</li>
+ <li>Clear particles -- <var class="funcname">CG_ClearParticles()</var>
+  <ol>
+  <li></li>
+  </ol></li> </ol></li><li>Load clients and player models -- <var class="funcname">CG_RegisterClients()</var>
+ <ol>
+ <li>Report loading client information (our own) -- <var class="funcname">CG_LoadingClient()</var>.
+  <ol>
+  <li>Get indicated client ConfigString -- <var class="funcname">CG_ConfigString()</var></li>
+  <li>If displayed less than <tt class="constname">MAX_LOADING_PLAYER_ICONS</tt> player icons, figure out the player icon to display, display it, save player icon into <var class="varname">loadingPlayerIcons[]</var> increment the icons counter</li>
+  <li>Get client name from ConfigString</li>
+  <li>Clean up the name, stripping out invalid, dangerous, or otherwise illicit characters -- <var class="funcname">Q_CleanStr()</var></li>
+  <li>If single-player game, load the announcer voice saying the player's (bot's) name</li>
+  <li>Display client name as loading string</li>
+  </ol></li> <li>Update clientinfo (<var class="varname">cgs.clientinfo[...]</var>) -- <var class="funcname">CG_NewClientInfo()</var>.
+  <ol>
+  <li>Extract various fields from ConfigString, populate <var class="varname">newInfo</var>, then copy into <var class="varname">cgs.clientinfo[clientNum]</var></li>
+  <li><b class="xxx">XXX</b>: CG_ScanForExistingClientInfo()</li>
+  </ol></li> <li>For all clients (0 through <tt class="constname">MAX_CLIENTS</tt>):
+  <ol>
+  <li>Skip to next client if this is our client number</li>
+  <li>Get clientinfo from ConfigString -- <var class="funcname">CG_ConfigString(CS_PLAYERS+...)</var></li>
+  <li>If clientinfo is empty, skip to next client</li>
+
+  <li>Report on loading client information (others) -- <var class="funcname">CG_LoadingClient()</var></li>
+  <li>Update clientinfo -- <var class="funcname">CG_NewClientInfo()</var></li>
+  </ol></li> <li>Build the list of names of spectators -- <var class="funcname">CG_BuildSpectatorString()</var>.
+  <ol>
+  <li></li>
+  </ol></li> </ol></li><li>Set deferred models loading (load up model on death, instead of during play)</li>
+<li>Initialize local entities array -- <var class="funcname">CG_InitLocalEntities()</var>
+ <ol>
+ <li>Zero out (clear) array <var class="varname">cg_localEntities[]</var></li>
+ <li>Set <var class="varname">cg_activeLocalEntities.next</var> and <var class="varname">cg_activeLocalEntities.prev</var> to <var class="varname">cg_activeLocalEntities</var> (itself?)</li>
+ <li>Set <var class="varname">cg_freeLocalEntities</var> to the first element (offset 0) of <var class="varname">cg_localEntities[]</var></li>
+ <li>Chain up the elements of <var class="varname">cg_localEntities[]</var> by setting <var class="varname">cg_localEntities[i].next</var> to <var class="varname">cg_localEntities[i+1]</var>, except the last element, which points <var class="varname">next</var> back to the first element (<var class="varname">cg_localEntities[]</var> as a circular list)</li>
+ </ol></li><li>Initialized marked polygons -- <var class="funcname">CG_InitMarkPolys()</var>
+ <ol>
+ <li>Zero out (clear) array <var class="varname">cg_markPolys[]</var></li>
+ <li>Set <var class="varname">cg_activeMarkPolys.nextMark</var> and <var class="varname">cg_activeMarkPolys.prevMark</var> to <var class="varname">cg_activeMarkPolys</var> (itself?)</li>
+ <li>Set <var class="varname">cg_freeMarkPolys</var> to the first element of <var class="varname">cg_markPolys[]</var></li>
+ <li>Chain up elements of <var class="varname">cg_markPolys</var> as a circular list</li>
+ </ol></li><li>Clear/erase the loading string/message</li>
+<li>Update values -- <var class="funcname">CG_SetConfigValues()</var>
+ <ol>
+ <li>Retrieve ConfigString CS_<span class="configstring">SCORES1</span> into <var class="varname">cgs.scores1</var></li>
+ <li>Retrieve ConfigString CS_<span class="configstring">SCORES2</span> into <var class="varname">cgs.scores2</var></li>
+ <li>Retrieve ConfigString CS_<span class="configstring">LEVEL_START_TIME</span> into <var class="varname">cgs.levelStartTime</var></li>
+ <li>If a CTF gametype, retrieve ConfigString CS_<span class="configstring">FLAGSTATUS</span> for the status of CTF flags, and store into <var class="varname">cgs.redflag</var> and <var class="varname">cgs.blueflag</var></li>
+ <li>Retrieve ConfigString CS_<span class="configstring">WARMUP</span> into <var class="varname">cg.warmup</var></li>
+ </ol></li><li>Start background music -- <var class="funcname">CG_StartMusic()</var>.
+  <ol>
+  <li>Retrieve ConfigString CS_<span class="configstring">MUSIC</span> into <var class="varname">s</var></li>
+  <li>Parse into two words</li>
+  <li>Start playing background music based on this parsing -- <var class="funcname">trap_S_StartBackgroundTrack()</var></li>
+  </ol></li><li>Clear <q>"loading..."</q> message</li>
+<li>Change shader states as needed -- <var class="funcname">CG_ShaderStateChanged()</var>
+  <ol>
+  <li></li>
+  </ol></li><li>Stop any looping sound -- <var class="funcname">trap_S_ClearLoopingSounds()</var></li>
+</ol>
+
+<h3><a name="CG_SHUTDOWN">vmMain(CG_SHUTDOWN)</a></h3>
+<p>
+Called when Q3 is shutting down the cgame module, as when ending a map or quitting entirely.
+No arguments.
+
+<p>
+Immediate branch to <var class="funcname">CG_Shutdown()</var>.
+
+
+<h4><a name="CG_Shutdown">CG_Shutdown()</a></h4>
+<p>
+<ol>
+<li>(nothing.  Space reserved for mods that may need some explicit cleaning up, such as closing files, special commands, last desperate attempt to write some file, etc.)</li>
+</ol>
+
+<h3><a name="CG_CONSOLE_COMMAND">CG_ConsoleCommand()</a></h3>
+<p>
+Console commands are any textual commands not recognized by the Q3 engine itself.
+Such commands may be entered by the drop-down console, or by key bindings (e.g. <kbd class="">/bind k kill</kbd>).
+No arguments.
+
+<p>
+Immediate branch to <var class="funcname">CG_ConsoleCommand()</var>.
+
+
+
+<h4><a name="CG_ConsoleCommand">CG_ConsoleCommand()</a></h4>
+<p>
+<ol>
+<li>Go through the array of cgame console commands <var class="varname">commands[]</var>, trying to match names (case-insensitive).</li>
+<li>If a match is found, call the associated function [pointer].</li>
+</ol>
+
+<h2><a name="CG_DRAW_ACTIVE_FRAME">vmMain(CG_DRAW_ACTIVE_FRAME, serverTime, stereoView, demoPlayback)</a></h2>
+<p>
+<b class="xxx">XXX</b>: blahblah.
+Three arguments:
+<dl>
+<dt><a name="CG_DRAW_ACTIVE_FRAME.serverTime">serverTime</a></dt><dd>The timestamp of the packet (<b class="xxx">XXX</b>: what packet?) from the server.</dd>
+<dt><a name="CG_DRAW_ACTIVE_FRAME.stereoView">stereoView</a></dt><dd>Whether to render as stereo view.</dd>
+<dt><a name="CG_DRAW_ACTIVE_FRAME.demoPlayback">demoPlayback</a></dt><dd>True if playing back a demo, false otherwise (online game).</dd>
+</dl>
+<p>
+Immediate branch to <var class="funcname">CG_DrawActiveFrame()</var>.
+
+
+<h4><a name="CG_DrawActiveFrame">CG_DrawActiveFrame(serverTime, stereoView, demoPlayback)</a></h4>
+<p>
+<ol>
+<li>Record <var class="varname">serverTime</var> into <var class="varname">cg.time</var></li>
+<li>Record <var class="varname">demoPlayback</var> into <var class="varname">cg.demoPlayerback</var></li>
+<li>Update cvars -- <var class="funcname">CG_UpdateCvars()</var>
+ <ol>
+ <li>For all entries in <var class="varname">cvarTable[]</var>, update the <var class="typename">vmCvar_t</var> member with <var class="funcname">trap_Cvar_Update()</var>.</li>
+ <li>Do any checking of changed cvars, and actions to such changes, as needed.</li>
+ <li>Checking team overlay (cvar <q><span class="cvarname">teamoverlay</span></q>).</li>
+ <li>Something about cvar <q><span class="cvarname">cg_forceModel</span></q> having changed... -- <var class="funcname">CG_ForceModelChange()</var></li>
+ </ol></li><li>Um... something about loading screen vs. playing? -- <var class="funcname">CG_DrawInformation()</var>
+ <ol>
+ <li>Retrieve ConfigString CS_<span class="configstring">SERVERINFO</span> into <var class="varname">info</var>.</li>
+ <li>Retrieve ConfigString CS_<span class="configstring">SYSTEMINFO</span> into <var class="varname">sysInfo</var>.</li>
+ <li>Retrieve value for <q><tt class="keyname">mapinfo</tt></q> from <var class="varname">info</var>, mangle to get a levelshot name, display on screen -- <var class="funcname">CG_DrawPic()</var>
+  <ol>
+  <li>Figure out scaled positions and sizes -- <var class="funcname">CG_AdjustFrom640()</var>
+   <ol>
+   <li>Multiply <var class="varname">x</var> and <var class="varname">w</var> by <var class="varname">cgs.screenXScale</var></li>
+   <li>Multiply <var class="varname">y</var> and <var class="varname">h</var> by <var class="varname">cgs.screenYScale</var></li>
+   </ol></li>  <li>Blt image with recalculated positions and sizes -- <var class="funcname">trap_R_DrawStretchPic()</var></li>
+  </ol></li> <li>Retrieve shader named <q>levelShotDetail</q>, draw it on top of the levelshot image -- <var class="funcname">trap_R_DrawStretchPic()</var></li>
+ <li>draw icons indicating the data loaded -- <var class="funcname">CG_DrawLoadingIcon()</var>
+  <ol>
+  <li>Draw the player icons representing the player information already loaded so far</li>
+  <li>Draw the item icons representing the item information already loaded thus far</li>
+  </ol></li> </ol></li><li>Clear looping sounds -- <var class="funcname">trap_S_ClearLoopingSounds()</var></li>
+<li>Clear render list -- <var class="funcname">trap_R_ClearScene()</var></li>
+<li>Set up <var class="varname">cg.snap</var> and <var class="varname">cg.nextSnap</var> -- <var class="funcname">CG_ProcessSnapshot()</var>
+ <ol>
+ <li>Retrieve latest snapshot time from Q3 client engine into <var class="varname">n</var></li>
+ <li>If the latest snapshot number is less than what we had before, something very very bad happened.</li>
+ <li>Update <var class="varname">cg.latestSnapshotNum</var> accordingly.</li>
+ <li>If <var class="varname">cg.snap</var> is empty:
+  <ol>
+  <li>Retrieve next snapshot into <var class="varname">snap</var> -- <var class="funcname">CG_ReadNextSnapshot()</var>
+   <ol>
+   <li>If latest snapshot and processed snapshot are off by 1000, complain</li>
+   <li>Loop while <var class="varname">cg.processedSnapshotNum</var> is less than <var class="varname">cg.latestSnapshotNum</var>:
+    <ol>
+    <li>Figure which slot, <var class="varname">cg.activeSnapshots[0]</var> or <var class="varname">cg.activeSnapshots[1]</var> to use.</li>
+    <li>Increment <var class="varname">cg_processedSnapshotNum</var>, retrieve snapshot into <var class="varname">r</var> -- <var class="funcname">trap_GetSnapshot()</var></li>
+    <li>um... something about snapshot server time?</li>
+    <li>If retrieval succeeded, record in lagometer info and return -- <var class="funcname">CG_AddLagometerSnapshotInfo()</var>
+     <ol>
+     <li>If snap is <tt class="constname">NULL</tt>, record -1 into <var class="varname">lagometer.snapshotSamples[]</var> and increment <var class="varname">lagometer.snapshotCount</var>, and return</li>
+     <li>Otherwise, record snap's ping into <var class="varname">lagometer.snapshotSamples[]</var>, record snap's flags into <var class="varname">lagometer.snapshotFlags[]</var>, and increment <var class="varname">lagometer.snapshotCount</var>, and return</li>
+     </ol></li>    </ol></li>    <li>Record as dropped packet in lagometer info -- <var class="funcname">CG_AddLagometerInfo()</var></li>
+    <li>If nothing left to read, return <tt class="constname">NULL</tt> (failure)</li>
+   </ol></li>  <li>If no snap found, bad.</li>
+  <li>??? -- <var class="funcname">CG_SetInitialSnapshot()</var>
+   <ol>
+   <li>Record <var class="varname">snap</var> into <var class="varname">cg.snap</var> (initial snapshot).</li>
+   <li>Retrieve <var class="typename">entityState_t</var> info from snap's <var class="typename">playerState_t</var> info.</li>
+   <li>Build the list of solid and trigger entities -- <var class="funcname">CG_BuildSolidList()</var>
+    <ol>
+    <li>If nextsnap is available and not currently teleporting, use <var class="varname">cg.nextsnap</var>, otherwise use <var class="varname">cg.snap</var></li>
+    <li>For all entities in snap:
+     <ol>
+     <li>Get entity's state slot</li>
+     <li>If an item, or a teleport trigger, or a push trigger, record in <var class="varname">cg_triggerEntities[]</var> and update <var class="varname">cg_numTriggerEntities</var></li>
+     <li>If a solid entity, record in <var class="varname">cg_solidEntities[]</var> and update <var class="varname">cg_numSolidEntities</var></li>
+     </ol></li>    </ol></li>   <li>um.... -- <var class="funcname">CG_ExecuteNewServerCommands()</var>
+    <ol>
+    <li>Keep looping while <var class="varname">cgs.serverCommandSequence</var> < <var class="varname">latestSequence</var> (???):
+     <ol>
+     <li>Get server command -- <var class="funcname">trap_GetServerCommand()</var></li>
+     <li>Process server command -- <var class="funcname">CG_ServerCommand()</var>
+      <ol>
+      <li>(<b class="xxx">XXX</b>: EEK!)</li>
+      </ol></li>     </ol></li>    </ol></li>   <li>Change weapon to what the server says -- <var class="funcname">CG_Respawn()</var>
+    <ol>
+    <li>Disable error decay (??)</li>
+    <li>Set weapon time?</li>
+    <li>Set weapon according to snap information (<var class="varname">cg.snap->ps.weapon</var>)</li>
+    </ol></li>   <li>For all entities in snap:
+    <ol>
+    <li>Get entity's snap state information.</li>
+    <li>Get appropriate cent pointer.</li>
+    <li>Clear current state information.</li>
+    <li>??? -- <var class="funcname">CG_ResetEntity()</var>
+     <ol>
+     <li>Clear event.</li>
+     <li>Record <var class="varname">cg.snap->serverTime</var> into <var class="varname">cent->trailTime</var> (<b class="xxx">XXX</b>: what's this for?)</li>
+     <li>Copy <var class="varname">currentOrigin</var> and <var class="varname">currentAngles</var> into <var class="varname">lerpOrigin</var> and <var class="varname">lerpAngles</var></li>
+     <li>If a player entity, call <var class="funcname">CG_ResetPlayerEntity()</var>
+      <ol>
+      <li>Eliminate error decays (???)</li>
+      <li>Reset a bunch of animation information.</li>
+      </ol></li>     </ol></li>    <li>??? -- <var class="funcname">CG_CheckEvents()</var>
+     <ol>
+     <li>If centity's eType is an event:
+      <ol>
+      <li>Do nothing (return) if event already fired (occured)</li>
+      <li>Mark as already now being fired</li>
+      <li>Record event type into <var class="varname">cent->currentState.event</var></li>
+      </ol></li>     <li>otherwise:
+      <ol>
+      <li>Do nothing (return) if event is attached to (riding on) another entity</li>
+      <li>Copy current event into <var class="varname">cent->previousEvent</var></li>
+      <li>Do nothing if event is not supposed to occur (bitmask flag)?</li>
+      </ol></li>     <li>Calculate new position -- <var class="funcname">BG_EvaluateTrajectory()</var></li>
+     <li>??? -- <var class="funcname">CG_SetEntitySoundPosition()</var>
+      <ol>
+      <li>If an inline model, place entity sound position at model's midpoint -- <var class="funcname">trap_S_UpdateEntityPosition()</var></li>
+      <li>Otherwise, place entity sound position at calculated location -- <var class="funcname">trap_S_UpdateEntityPosition()</var></li>
+      </ol></li>     <li>??? -- <var class="funcname">CG_EntityEvent()</var>
+      <ol>
+      <li>(<b class="xxx">XXX</b>: EEK!)</li>
+      </ol></li>     </ol></li>    </ol></li>   </ol></li>  </ol></li> <li>Loop ceaselessly:
+  <ol>
+  <li>If <var class="varname">cg.nextSnap</var> is empty:
+   <ol>
+   <li>Retrieve next snapshot into <var class="varname">snap</var> -- <var class="funcname">CG_ReadNextSnapshot()</var></li>
+   <li>If no snap is available, break loop any (extrapolate)</li>
+   <li>??? -- <var class="funcname">CG_SetNextSnap()</var>
+    <ol>
+    <li>Set <var class="varname">cg.nextSnap</var> to the new snap</li>
+    <li>Extract <var class="typename">entityState_t</var> information from <var class="typename">playerState_t</var> information in snap</li>
+    <li>Allow position interpolation</li>
+    <li>For each entity listed in snap:
+     <ol>
+     <li>Clear <var class="varname">cent->nextState</var></li>
+     <li>If teleporting, or otherwise doesn't have a prior position to sensibly interpolate from, turn off interpolation; otherwise turn it on.</li>
+     </ol></li>    <li>If client number in current and next snap don't match, act as if teleporting (?)</li>
+    <li>Something about server restart and not interpolating???</li>
+    <li>Build the list of solid and trigger entities -- <var class="funcname">CG_BuildSolidList()</var></li>
+    </ol></li>   <li>If server time jumped backwards, interpret as level restart.</li>
+   </ol></li>  <li>If <var class="varname">cg.time</var> is between <var class="varname">cg.snap->serverTime</var> and <var class="varname">cg.nextSnap->serverTime</var>, end the loop (interpolate)</li>
+  <li>Make the transition to the next snapshot -- <var class="funcname">CG_TransitionSnapshot()</var>
+   <ol>
+   <li>Complain if <var class="varname">cg.snap</var> or <var class="varname">cg.nextSnap</var> is/are null</li>
+   <li>??? -- <var class="funcname">CG_ExecuteNewServerCommands()</var>
+    <ol>
+    <li></li>
+    </ol></li>   <li>Invalidate all entities in existing snap</li>
+   <li>Temporarily save <var class="varname">cg.snap</var>, move <var class="varname">cg.nextSnap</var> into <var class="varname">cg.snap</var></li>
+   <li>Update clients entity information</li>
+   <li>For all entities in (new) snap:
+    <ol>
+    <li>??? -- <var class="funcname">CG_TransitionEntity()</var>
+     <ol>
+     <li>If centity position is not to be interpolated (popped into view, teleported in, respawned), reset the entity -- <var class="funcname">CG_ResetEntity()</var></li>
+     <li>Turn off interpolation (clear next state?)</li>
+     <li>Check for events -- <var class="funcname">CG_CheckEvents()</var></li>
+     </ol></li>    <li>Update recorded server time</li>
+    <li>Check if client is teleporting</li>
+    <li>If not doing client-side prediction, ??? -- <var class="funcname">CG_TransitionPlayerState()</var>
+     <ol>
+     <li></li>
+     </ol></li>    </ol></li>   </ol></li>  </ol></li> <li>Assert various conditions (trigger fatal error if any check is false)</li>
+ </ol></li><li>Draw loading screen and return if no snapshots received?</li>
+<li>Notify Q3 engine of weapon and zoom (mouse) sensitivity -- <var class="funcname">trap_SetUserCmdValue()</var></li>
+<li>Keep track of how many frames have been rendered so far in <var class="varname">cg.clientFrame</var></li>
+<li>Update <var class="varname">cg.predictedPlayerState</var> -- <var class="funcname">CG_PredictPlayerState()</var>
+ <ol>
+ <li>Set <var class="varname">cg.hyperspace</var> to <tt class="constname">qfalse</tt> (why???)</li>
+ <li>If no valid predicted player state data yet, fill it in as needed</li>
+ <li>If playing back a demo, interpolation movements and return -- <var class="funcname">CG_InterpolatePlayerState()</var>
+  <ol>
+  <li>if allowing local input (disabled in spectating or demo playback), short-circuit the view angles (change it despite what server says) -- <var class="funcname">PM_UpdateViewAngles()</var>
+   <ol>
+   <li></li>
+   </ol></li>  <li>If teleporting, return (no point in interpolating)</li>
+  <li>Check for inconsistencies(?)</li>
+  <li>Into <var class="varname">f</var> goes the fraction between <var class="varname">prev->serverTime</var> and <var class="varname">next->serverTime</var> that <var class="varname">cg.time</var> resides</li>
+  <li>Set bobbing accordingly.</li>
+  <li>Move entity by the calculated fractional amount</li>
+  <li>Change entity fractionally as well if local input allowed</li>
+  </ol></li> <li>Set up for call to <var class="funcname">Pmove()</var></li>
+ <li>Saved old player state info.</li>
+ <li>Retrieve current command number into <var class="varname">current</var> -- <var class="funcname">trap_GetCurrentCmdNumber()</var></li>
+ <li>If can't get a good command (?), just return (effect is freezing in place) -- <var class="funcname">trap_GetUserCmd()</var></li>
+ <li>Get latest commands -- <var class="funcname">trap_GetUserCmd()</var></li>
+ <li>Use <var class="varname">cg.snap</var> or <var class="varname">cg.nextSnap</var> depending on next snap being available and teleporting</li>
+ <li>Retrict cvar <q><span class="cvarname">pmove_msec</span></q> within a certain range</li>
+ <li>Set <var class="varname">cg_pmove.pmove_fixed</var> to <q><span class="cvarname">pmove_fixed</span></q></li>
+ <li>Set <var class="varname">cg_pmove.pmove_msec</var> to <q><span class="cvarname">pmove_msec</span></q></li>
+ </ol></li><li>Go into third-person view (<var class="varname">cg.renderingThirdPerson</var>) if cvar <var class="varname">cg_thirdPerson</var> is non-zero, or if dead</li>
+<li>Calculate the stuff related to the viewing camera (client's eye(s)) -- <var class="funcname">CG_CalcViewValues()</var>
+ <ol>
+ <li>Clear <var class="varname">cg.refdef</var></li>
+ <li>Calculate the portions of the screen to draw camera view within (view rectangle, how much black border around the screen edge) -- <var class="funcname">CG_CalcVrect()</var>
+  <ol>
+  <li>If intermission, fill up the entire screen (size = 100)</li>
+  <li>Otherwise, clip cvar <q><span class="cvarname">cg_viewsize</span></q> within 30 and 100.</li>
+  <li>Ensure <var class="varname">cg.refdef.width</var> and <var class="varname">cg.refdef.height</var> are even numbers.</li>
+  <li>Center the view rectangle.</li>
+  </ol></li> <li>If intermission view:
+  <ol>
+  <li>Copy server-reported location into refdef's view origin</li>
+  <li>Copy server-reported view angles into redef's view angles</li>
+  <li>Calculate FOV and return -- <var class="funcname">CG_CalcFov()</var></li>
+  </ol></li>
+ <li>Set bobbing.</li>
+ <li>Something about speed on X-Y plane... </li>
+ <li>Update camera orbiting data</li>
+ <li>If errordecay:
+  <ol>
+  <li>Calculate decay fraction.</li>
+  <li>Shift refdef's view origin accordingly.</li>
+  </ol></li> <li>Check if drawing in third-person view -- <var class="funcname">CG_OffsetThirdPersonView()</var></li>
+ <li>Otherwise draw in first-person view -- <var class="funcname">CG_OffsetFirstPersonView()</var></li>
+ <li>Position the eyes properly</li>
+ <li>If not in hyperspace... <b class="xxx">XXX</b>: ??? </li>
+ <li>Calculate field of view/vision (FOV) -- <var class="funcname">CG_CalcFov()</var>
+  <ol>
+  <li>If in intermission, fix FOV at 90 degrees</li>
+  <li>Otherwise, calculate FOV based on <q><span class="cvarname">cg_fov</span></q>, clipping within range as needed, and alter based on zoom state; or keep at 90 if server set <tt class="constname">DF_FIXED_FOV</tt> bit in dmflags</li>
+  <li>Convert FOV degrees to radians.</li>
+  <li>If inside liquid:
+   <ol>
+   <li>Munge X and Y components of FOV by a sinusoidal function, each component phase-shifted by a half-cycle (widest when shortest, tallest when narrowest)</li>
+   </ol></li>  <li>Set <var class="varname">cg.refdef.fov_x</var> and <var class="varname">cg.refdef.fov_y</var></li>
+  <li>Set <var class="varname">cg.zoomSensitivity</var> according to zoomed state.</li>
+  </ol></li> </ol></li><li>Show damage blob (the screen-reddening effect when damaged) -- <var class="funcname">CG_DamageBlendBlob()</var>
+ <ol>
+ <li>If no damage received, return</li>
+ <li>If detected RagePro vidcard, return</li>
+ <li>If beyond display time, return</li>
+ <li>Clear blob entity</li>
+ <li>Set blob entity parameters (sprite, shown only in first-person view)</li>
+ <li>Place blob entity right in front of camera</li>
+ <li>Set full color, set transparency proportional to blob display time (fade away)</li>
+ <li>Add blob entity to rendering scene -- <var class="funcname">trap_R_AddRefEntityToScene()</var></li>
+ </ol></li><li>If not in hyperspace, build render list:
+ <ol>
+ <li>Add entities specified in packet from server -- <var class="funcname">CG_AddPacketEntities()</var>
+  <ol>
+  <li>Calculate interpolation amount</li>
+  <li>Calculate (all) rotation phase</li>
+  <li>Calculate (all) fast-rotation phase</li>
+  <li>Extract <var class="typename">entityState_t</var> from <var class="typename">playerState_t</var> of <var class="varname">cg.predictedPlayerState</var></li>
+  <li>Add player entity to rendering -- <var class="funcname">CG_AddCEntity()</var>
+   <ol>
+   <li>(<b class="xxx">XXX</b>: EEK!)</li>
+   </ol></li>  <li>Lerp (linearly interpolate) lightning gun position -- <var class="funcname">CG_CalcEntityLerpPositions()</var>
+   <ol>
+   <li>If cvar <q><span class="cvarname">cg_smoothClients</span></q> is 0, client doesn't want extrapolated positions, force TR_INTERPOLATE trajectory type on clients' positions</li>
+   <li>If TR_INTERPOLATE trajectory type, lerp entity's position -- <var class="funcname">CG_InterpolateEntityPosition()</var>
+    <ol>
+    <li>Complain if insufficient interpolation data (second position)</li>
+    <li>Calculate the predicted entity position</li>
+    <li>Lerp position according to interpolation fraction</li>
+    <li>Calculate the predicted entity angles</li>
+    <li>Lerp angles according to interpolation fraction -- <var class="funcname">Lerp_Angle()</var></li>
+    </ol></li>   <li>Use current frame and extrapolate position and angle</li>
+   <li>Adjust for mover's movement if necessary -- <var class="funcname">CG_AdjustPositionForMover()</var>
+    <ol>
+    <li>Check that entity is valid</li>
+    <li>Check entity is a mover</li>
+    <li>Evaluate mover trajectory effect</li>
+    </ol></li>   </ol></li>  <li>For each entities listed in the snapshot:
+   <ol>
+   <li>Add the entity to rendering -- <var class="funcname">CG_AddCEntity()</var></li>
+   </ol></li>  </ol></li> <li>Add various marks to surfaces (burn marks, blood splatters, etc.) -- <var class="funcname">CG_AddMarks()</var>
+  <ol>
+  <li>If cvar <q><span class="cvarname">cg_addMarks</span></q> is 0, return</li>
+  <li>For all recorded marks:
+   <ol>
+   <li>Some linked list doohickerymajiggy?</li>
+   <li>If mark's time expired, free the mark, move on to next mark -- <var class="funcname">CG_FreeMarkPoly()</var>
+    <ol>
+    <li>Remove from doubly-linked list of active marks</li>
+    <li>Also update free list (a singly-linked list)</li>
+    </ol></li>   </ol></li>   <li>For energy bursts (e.g. plasma-hit-wall, rail-hit-wall), fade out colors based on its age (<var class="varname">mp->time</var>)</li>
+   <li>Fade out the mark based on age.</li>
+   <li>Add mark entity to render scene -- <var class="funcname">trap_AddPolyToScene()</var></li>
+  </ol></li> <li>Add entities that are implied by game entities, or explicitly generated locally -- <var class="funcname">CG_AddLocalEntities()</var>
+  <ol>
+  <li>Traverse through the list <var class="varname">cg_activeLocalEntities</var> backwards:
+   <ol>
+   <li>grab pointer to <var class="varname">next</var> in case of early freeing.</li>
+   <li>if local entity lifespan exceeded, remove -- <var class="funcname">CG_FreeLocalEntity()</var></li>
+   <li>Based on entity type, call approriate function:
+    <ul>
+    <li><tt class="constname">LE_MARK</tt> -- (handled elsewhere)</li>
+    <li><tt class="constname">LE_SPRITE_EXPLOSION</tt> -- <var class="funcname">CG_AddSpriteExplosion()</var></li>
+    <li><tt class="constname">LE_EXPLOSION</tt> -- <var class="funcname">CG_AddExplosion()</var></li>
+    <li><tt class="constname">LE_FRAGMENT</tt> (gibs, brass) -- <var class="funcname">CG_AddFragment()</var></li>
+    <li><tt class="constname">LE_MOVE_SCALE_FADE</tt> (water bubble) -- <var class="funcname">CG_AddMoveScaleFade()</var></li>
+    <li><tt class="constname">LE_FADE_RGB</tt> (teleporter, railtrail) -- <var class="funcname">CG_AddFadeRGB()</var></li>
+    <li><tt class="constname">LE_FALL_SCALE_FADE</tt> (gibs blood trail) -- <var class="funcname">CG_AddFallScaleFade()</var></li>
+    <li><tt class="constname">LE_SCALE_FADE</tt> (rocket trail) -- <var class="funcname">CG_AddScaleFade()</var></li>
+    <li><tt class="constname">LE_SCOREPLUM</tt> (floating score) -- <var class="funcname">CG_AddScorePlum()</var></li>
+    </ul></li>   </ol></li>  <li>(<b class="xxx">XXX</b>: EEK!)</li>
+  </ol></li> </ol></li><li>Draw the gun/weapon -- <var class="funcname">CG_AddViewWeapon()</var>
+ <ol>
+ <li>If spectator, return</li>
+ <li>If in intermission, return</li>
+ <li>If in third person view, don't draw weapon view (it gets rendered in whole, anyway)</li>
+ <li>If cvar <q><span class="cvarname">cg_drawGun</span></q> is 0, don't draw the gun, while doing some special position-shifting hack for lightning gun</li>
+ <li>If testing a gun model, return</li>
+ <li>Position the gun lower at higher FOV values</li>
+ <li>??? -- <var class="funcname">CG_RegisterWeapon()</var>
+  <ol>
+  <li></li>
+  </ol></li> </ol></li><li>??? -- <var class="funcname">CG_PlayBufferedSounds()</var>
+ <ol>
+ <li>(play next sound stored in sound ring buffer)</li>
+ </ol></li><li>Play voice chat sounds -- <var class="funcname">CG_PlayBufferedVoiceChats()</var>
+ <ol>
+ <li>(Q3 Team Arena only, skipping)</li>
+ </ol></li><li>Add test model specified by "testmodel" client console command -- <var class="funcname">CG_AddTestModel()</var>
+ <ol>
+ <li></li>
+ </ol></li><li>Record <var class="varname">cg.time</var> into <var class="varname">cg.refdef.time</var></li>
+<li>Copy <var class="varname">cg.snap->areamask</var> into <var class="varname">cg.refdef.areamask</var></li>
+<li>Play any sounds associated with powerups wearing out (expiring) -- <var class="funcname">CG_PowerupTimerSounds()</var>
+ <ol>
+ <li></li>
+ </ol></li><li>update audio positions -- <var class="funcname">trap_S_Respatialize()</var>.</li>
+<li>Draw lag-o-meter, but make sure it isn't done twice in stereoscopic view -- <var class="funcname">CG_AddLagometerFrameInfo()</var>
+ <ol>
+ <li>Record lagometer sample offset number info <var class="varname">lagometer.frameSamples[]</var>, update <var class="varname">lagometer.frameCount</var></li>
+ </ol></li><li>um... something about cvar <q><span class="cvarname">timescale</span></q>?...</li>
+<li>Make rendering calls -- <var class="funcname">CG_DrawActive()</var>
+ <ol>
+ <li>If no baseline snapshot (<var class="varname">cg.snap</var>) still, draw the info/loading screen -- <var class="funcname">CG_DrawInformation()</var></li>
+ <li>If a spectator and looking at scoreboard, display tournament scoreboard -- <var class="funcname">CG_DrawTourneyScoreboard()</var>
+  <ol>
+  <li></li>
+  </ol></li> <li>Adjust separation based on stereoscopic view</li>
+ <li>Add filler graphic around sized-down refresh window (sizeup/sizedown) -- <var class="funcname">CG_TileClear()</var>
+  <ol>
+  <li>Get video dimensions.</li>
+  <li>If full-screen rendering, don't bother (return).</li>
+  <li>Get the edges of the refresh screen.</li>
+  <li>Clear the top edge of view screen -- <var class="funcname">CG_TileClearBox()</var>
+   <ol>
+   <li>Calculate how many repeats needed vertically and horizontally</li>
+   <li>Tile the image -- <var class="funcname">trap_R_DrawStretchPic()</var></li>
+   </ol></li>  <li>Clear the bottom edge of view screen -- <var class="funcname">CG_TileClearBox()</var></li>
+  <li>Clear the left edge of view screen -- <var class="funcname">CG_TileClearBox()</var></li>
+  <li>Clear the right edge of view screen -- <var class="funcname">CG_TileClearBox()</var></li>
+  </ol></li> <li>Shift <var class="varname">cg.refdef.vieworg</var> based on stereoscopic seperation</li>
+ <li>Render the scene -- <var class="funcname">trap_R_RenderScene()</var></li>
+ <li>Restore original viewpoint as needed</li>
+ <li>Draw HUD and other 2D elements -- <var class="funcname">CG_Draw2D()</var>
+  <ol>
+  <li>If taking levelshot (<q><span class="cvarname">levelshot</span></q> is non-zero), don't bother (return)</li>
+  <li>If <q><span class="cvarname">draw2D</span></q> is zero, don't bother (return)</li>
+  <li>If at intermission, do intermission stuff -- <var class="funcname">CG_DrawIntermission()</var>
+   <ol>
+   <li>If single player mode, draw something... -- <var class="funcname">CG_DrawCenterString()</var>
+    <ol>
+    <li></li>
+    </ol></li>   <li>otherwise, draw scoreboard -- <var class="funcname">CG_DrawScoreboard()</var>
+    <ol>
+    <li></li>
+    </ol></li>   </ol></li>  <li>If a spectator, do spectator things:
+   <ol>
+   <li>??? -- <var class="funcname">CG_DrawSpectator()</var>
+    <ol>
+    <li></li>
+    </ol></li>   <li>??? -- <var class="funcname">CG_DrawCrosshair()</var>
+    <ol>
+    <li></li>
+    </ol></li>   <li>??? -- <var class="funcname">CG_DrawCrosshairNames()</var>
+    <ol>
+    <li></li>
+    </ol></li>   </ol></li>  <li>Otherwise, non-spectator stuff:
+   <ol>
+   <li>if alive and not looking at scores:
+    <ol>
+    <li>Draw status bar -- <var class="funcname">CG_DrawStatusBar()</var>
+     <ol>
+     <li></li>
+     </ol></li>    <li>Draw any ammo warning -- <var class="funcname">CG_DrawAmmoWarning()</var>
+     <ol>
+     <li></li>
+     </ol></li>    <li>Draw crosshairs -- <var class="funcname">CG_DrawCrosshair()</var>
+     <ol>
+     <li></li>
+     </ol></li>    <li>Draw crosshair names -- <var class="funcname">CG_DrawCrosshairNames()</var>
+     <ol>
+     <li></li>
+     </ol></li>    <li>Draw weapon selection (the icons along bottom on weapon switch) -- <var class="funcname">CG_DrawWeaponSelect()</var>
+     <ol>
+     <li></li>
+     </ol></li>    <li>Draw reward icons -- <var class="funcname">CG_DrawReward()</var>
+     <ol>
+     <li></li>
+     </ol></li>    </ol></li>   </ol></li>  <li>in either case, then draw vote status -- <var class="funcname">CG_DrawVote()</var>
+   <ol>
+   <li></li>
+   </ol></li>  <li>and any team votes -- <var class="funcname">CG_DrawTeamVote()</var>
+   <ol>
+   <li></li>
+   </ol></li>  <li>Draw the lagometer -- <var class="funcname">CG_DrawLagometer()</var>
+   <ol>
+   <li></li>
+   </ol></li>  <li>Draw uppper right stuff (fps, time) -- <var class="funcname">CG_DrawUpperRight()</var>
+   <ol>
+   <li></li>
+   </ol></li>  <li>Draw lower right stuff (powerups, scores) -- <var class="funcname">CG_DrawLowerRight()</var>
+   <ol>
+   <li></li>
+   </ol></li>  <li>Draw lower left stuff -- <var class="funcname">CG_DrawLowerLeft()</var>
+   <ol>
+   <li></li>
+   </ol></li>  <li>Determine if spectating and following another client -- <var class="funcname">CG_DrawFollow</var>
+   <ol>
+   <li></li>
+   </ol></li>  <li>Draw any warmup info if not following -- <var class="funcname">CG_DrawWarmup()</var>
+   <ol>
+   <li></li>
+   </ol></li>  <li>Try to draw scoreboard -- <var class="funcname">CG_DrawScoreboard</var>)
+   <ol>
+   <li></li>
+   </ol></li>  <li>If not showing scoreboard, try to draw any center strings -- <var class="funcname">CG_DrawCenterString()</var>
+   <ol>
+   <li></li>
+   </ol></li>  </ol></li> </ol></li><li>Print <var class="varname">cg.clientFrame</var> (frame number) if cvar <q><span class="cvarname">cg_stats</span></q> is non-zero.</li>
+</ol>
+
+<h3><a name="CG_CROSSHAIR_PLAYER">vmMain(CG_CROSSHAIR_PLAYER)</a></h3>
+<p>
+WTF?
+
+
+<p>
+Immediate branch to <var class="funcname">CG_CrosshairPlayer()</var>.
+
+
+<h4><a name="CG_CrosshairPlayer">CG_CrosshairPlayer()</a></h4>
+<p>
+<ol>
+<li>If still within 1 second of crosshair time (<b class="xxx">XXX</b>: what's that?), return <var class="varname">cg.crosshairClientNum</var>, otherwise return -1.</li>
+</ol>
+
+<h3><a name="CG_LAST_ATTACKER">vmMain(CG_LAST_ATTACKER)</a></h3>
+<p>
+WTF?
+
+
+<p>
+Immediate branch to <var class="funcname">CG_LastAttacker()</var>.
+
+
+<h4><a name="CG_LastAttacker">CG_LastAttacker()</a></h4>
+<p>
+<ol>
+<li>If client was ever attacked (damaged), return last attacker (<var class="varname">cg.snap-&gt;ps.persistant[PERS_ATTACKER]</var>)</li>
+</ol>
+
+<h3><a name="CG_KEY_EVENT">vmMain(CG_KEY_EVENT,key,down)</a></h3>
+<p>
+Called when key-trapping is on (trap_Key_SetCatcher(KEYCATCH_CGAME)) and a key is pressed or released.
+Two arguments:
+<dl>
+<dt><a name="CG_DRAW_ACTIVE_FRAME.key">key</a></dt><dd>
+Keycode of the key event.
+Every key generates a keycode (not necessarily unique).
+For the alphanumeric keys, the keycode corresponds to the key's ASCII code.
+For other keys, the values are something else... (<b class="xxx">XXX</b>: list keycodes).
+</dd>
+<dt><a name="CG_DRAW_ACTIVE_FRAME.down">down</a></dt><dd>
+Whether the event is generated by a key being pressed (qtrue) or being released (qfalse).
+</dd>
+</dl>
+<p>
+Immediate branch to <var class="funcname">CG_KeyEvent()</var>.
+
+
+<h4><a name="CG_KeyEvent">CG_KeyEvent(key,down)</a></h4>
+<p>
+<ol>
+<li>(Empty in baseq3.
+Mods may use this space for something useful.
+Q3TA defines a <var class="funcname">CG_KeyEvent()</var> with real meat; not covered here.)
+</li></ol>
+
+<h3><a name="CG_MOUSE_EVENT">vmMain(CG_MOUSE_EVENT,x,y)</a></h3>
+<p>
+Called when key-catching is enabled (trap_Set_KeyCatcher(KEYCATCH_CGAME)) and the mouse moves.
+No mouse event if the mouse is not moving.
+Button clicks count as key events (keycodes MOUSE1...MOUSE5, MWHEELUP, MWHEELDOWN).
+Two arguments:
+<dl>
+<dt><a name="CG_DRAW_ACTIVE_FRAME.x">x</a></dt><dd>Relative x (horizontal, left/right) motion.
+Positive values are towards the right, negative values towards the left.
+</dd>
+<dt><a name="CG_DRAW_ACTIVE_FRAME.y">y</a></dt><dd>Relative y (vertical, up/down) motion.
+Positive values are towards the bottom, negative values are towards the top.
+</dd>
+</dl>
+<p>
+Immediate branch to <var class="funcname">CG_MouseEvent</var>.
+
+
+<h4><a name="CG_MouseEvent">CG_MouseEvent(x,y)</a></h4>
+<p>
+<ol>
+<li>(Empty in baseq3.
+Mods may use this space for something useful.
+Q3TA defines a <var class="funcname">CG_MouseEvent()</var> with real meat; not covered here.)
+</li></ol>
+
+<h3><a name="CG_EVENT_HANDLING">vmMain(CG_EVENT_HANDLING,type)</a></h3>
+<p>
+(I'd like to know!)
+type - 0 = no event handling, 1 = team menu, 2 = hud editor (what hud editor???)
+
+<p>
+Immediate branch to <var class="funcname">CG_EventHandling</var>.
+
+
+<h4><a name="CG_EventHandling">CG_EventHandling(type)</a></h4>
+<p>
+<ol>
+<li>(Empty in baseq3.
+Q3TA defines a <var class="funcname">CG_EventHandling()</var> with real meat; not covered here.)
+</li></ol>
+
+
+<!--
+SECT1(FOO,[*vmMain(FOO, ...)*])
+_P([*
+When Q3 wants to ... Q3 calls vmMain with major function CONSTNAME(GAME_FOO), and ... arguments:
+LIST_ORDERED([*
+LI([*...*])
+*])dnl LIST_ORDERED
+*])dnl _P
+
+_P([*
+Immediate branch to FUNCNAME(something()).
+*])
+
+SECT1(CG_Foo,[*CG_Foo(...)*])
+_P([*
+...
+*])
+-->
+
+<hr id="footer" width="42%" align="left">
+<p>
+Created 2002.09.28 <br>
+Updated 2011.07.11 - change of contact e-mail <br>
+<address>
+PhaethonH
+&lt; PhaethonH@gmail.com &gt;
+</address>
+</BODY>
+</HTML>
