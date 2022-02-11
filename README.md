@@ -7,6 +7,7 @@ Quake 3 documentation
 * [Hit Boxes](./tutorials/hit_boxes.md)
 * [Bubble Gun](./tutorials/bubble_gun.md)
 * [Drop To Floor](./tutorials/drop_to_floor.md)
+* [Cluster Grenade](./tutorials/cluster_grenade.md)
 
 ## References
 * [Engine overview by Fabien Sanglard](https://fabiensanglard.net/quake3/index.php)
