@@ -8,8 +8,10 @@ Quake 3 documentation
 * [Bubble Gun](./tutorials/bubble_gun.md)
 * [Drop To Floor](./tutorials/drop_to_floor.md)
 * [Cluster Grenade](./tutorials/cluster_grenade.md)
+* [Gravity Well](./tutorials/gravity_well.md)
 
 ## References
+* [Quake 3 Network Protocol](https://www.jfedor.org/quake3/)
 * [Engine overview by Fabien Sanglard](https://fabiensanglard.net/quake3/index.php)
 * [Q3 Rendering by Brian Hook](https://archive.org/details/1999-gdc-brianhookquake3)
 * [Q3 Rendering (presentation notes)](http://www.gamers.org/dEngine/quake3/bwh_gdc99.txt)
