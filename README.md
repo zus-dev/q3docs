@@ -9,6 +9,8 @@ Quake 3 documentation
 * [Drop To Floor](./tutorials/drop_to_floor.md)
 * [Cluster Grenade](./tutorials/cluster_grenade.md)
 * [Gravity Well](./tutorials/gravity_well.md)
+* [BSP Collision Detection](./tutorials/bsp_collision_detection.md)
+
 
 ## References
 * [Quake 3 Network Protocol](https://www.jfedor.org/quake3/)
