@@ -11,7 +11,6 @@ Quake 3 documentation
 * [Gravity Well](./tutorials/gravity_well.md)
 * [BSP Collision Detection](./tutorials/bsp_collision_detection.md)
 
-
 ## References
 * [Quake 3 Network Protocol](https://www.jfedor.org/quake3/)
 * [Engine overview by Fabien Sanglard](https://fabiensanglard.net/quake3/index.php)
@@ -21,3 +20,5 @@ Quake 3 documentation
 * [Code3Arena](https://www.per-thormann.de/quake-3-arena-coding-tutorials/)
 * [Quake 3 Shaders](http://www.heppler.com/shader/)
 * [Collection of patches for little extra functionality Q3A](https://www.icculus.org/~phaethon/q3/collection.html)
+* [Structures and Typed Enums Used in the Quake III Arena Source Code](http://linradiant.intron-trans.hu/docs/q3a_structures.html)
+* [Unofficial Quake 3 Map Specs](http://www.mralligator.com/q3/)

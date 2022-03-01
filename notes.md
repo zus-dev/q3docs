@@ -154,50 +154,89 @@ Client:
 
 - How to create and add an object (from `g_missile.c`):
 ```c
-	/**
-	 * For trajectory handling, see bg_misc.c: void BG_EvaluateTrajectory( const trajectory_t *tr, int atTime, vec3_t result )
-	 *
-	 * Params:
-	 * 	self = The shooter of the rocket to be fired
-	 */
-	gentity_t *fire_rocket (gentity_t *self, vec3_t start, vec3_t dir) {
-		gentity_t	*bolt;
-	
-	int thinkDelayMillis = 15000;									// The time to wait until the thinkCallback is called
-	
-		VectorNormalize (dir);
-	
-		bolt = G_Spawn();											// create the rocket
-		bolt->classname = "rocket";									// name of the object -> has no effect on game mechanics
-		bolt->nextthink = level.time + thinkDelayMillis;			// call think after this time
-		bolt->think = thinkCallback;								// function to be called after thinkDelayMillis; for example: G_ExplodeMissile
-		bolt->s.eType = ET_MISSILE;									// the type of event to be triggered (used in AI for determining threat level of object; and in the client to determine model, sounds etc)
-		bolt->r.svFlags = SVF_USE_CURRENT_ORIGIN;					// "entity->r.currentOrigin instead of entity->s.origin" (see g_public.h)
-		bolt->s.weapon = WP_ROCKET_LAUNCHER;						// the weapon info is needed to determine the cause of damage and maybe other things
-		bolt->r.ownerNum = self->s.number;							// the player who owns this projectile
-		bolt->parent = self;										// i think this is used for objects that consist of multiple entities
-		bolt->damage = 100;											// amount of damage to be dealt to a target when hit directly
-		bolt->splashDamage = 100;									// amount of splash damage to be dealt (to anyone in splashRadius)
-		bolt->splashRadius = 120;									// radius to deliver damage upon impact or destruction of projectile
-		bolt->methodOfDeath = MOD_ROCKET;							// what happens if this projectile kills someone
-		bolt->splashMethodOfDeath = MOD_ROCKET_SPLASH;				// what happens if this projectile kills someone
-		bolt->clipmask = MASK_SHOT;									// seems to be used for collision detection
-		bolt->target_ent = NULL;									// not sure what target_ent is, seems to be used for collision detection
-	
-		bolt->s.pos.trType = TR_LINEAR;								// straight trajectory: Just keep going in the same direction
-		bolt->s.pos.trTime = level.time - MISSILE_PRESTEP_TIME;		// move a bit on the very first frame (necessary, so the delta upon first interpolation is ensured to be != 0)
-		
-		VectorCopy( start, bolt->s.pos.trBase );					// bolt->s.pos.trBase = start		-> start of the trajectory
-		VectorScale( dir, 900, bolt->s.pos.trDelta );				// bolt->s.pos.trDelta = 900 * dir	-> velocity vector
-		
-		VectorCopy (start, bolt->r.currentOrigin);					// bolt->r.currentOrigin = start	-> "currentOrigin will be used for all collision detection and world linking"
-		
-		SnapVector( bolt->s.pos.trDelta );							// save net bandwidth (internal optimization - can be ignored)
-		
-		return bolt;
-	}
+/**
+ * For trajectory handling, see bg_misc.c: void BG_EvaluateTrajectory( const trajectory_t *tr, int atTime, vec3_t result )
+ *
+ * Params:
+ * 	self = The shooter of the rocket to be fired
+ */
+gentity_t *fire_rocket (gentity_t *self, vec3_t start, vec3_t dir) {
+  gentity_t	*bolt;
+  
+  // The time to wait until the thinkCallback is called
+  int thinkDelayMillis = 15000;
+  
+  VectorNormalize (dir);
+
+  // create the rocket
+  bolt = G_Spawn(); 
+
+  // name of the object -> has no effect on game mechanics
+  bolt->classname = "rocket"; 
+
+  // call think after this time
+  bolt->nextthink = level.time + thinkDelayMillis; 
+
+  // function to be called after thinkDelayMillis; for example: G_ExplodeMissile
+  bolt->think = thinkCallback; 
+
+  // the type of event to be triggered (used in AI for determining threat level of object; and in the client to determine model, sounds etc)
+  bolt->s.eType = ET_MISSILE; 
+
+  // "entity->r.currentOrigin instead of entity->s.origin" (see g_public.h)
+  bolt->r.svFlags = SVF_USE_CURRENT_ORIGIN; 
+
+  // the weapon info is needed to determine the cause of damage and maybe other things
+  bolt->s.weapon = WP_ROCKET_LAUNCHER; 
+
+  // the player who owns this projectile
+  bolt->r.ownerNum = self->s.number; 
+
+  // i think this is used for objects that consist of multiple entities
+  bolt->parent = self; 
+
+  // amount of damage to be dealt to a target when hit directly
+  bolt->damage = 100; 
+
+  // amount of splash damage to be dealt (to anyone in splashRadius)
+  bolt->splashDamage = 100; 
+
+  // radius to deliver damage upon impact or destruction of projectile
+  bolt->splashRadius = 120; 
+
+  // what happens if this projectile kills someone
+  bolt->methodOfDeath = MOD_ROCKET; 
+
+  // what happens if this projectile kills someone
+  bolt->splashMethodOfDeath = MOD_ROCKET_SPLASH;				
+
+  // seems to be used for collision detection
+  bolt->clipmask = MASK_SHOT;
+
+  // not sure what target_ent is, seems to be used for collision detection
+  bolt->target_ent = NULL;
+
+  // straight trajectory: Just keep going in the same direction
+  bolt->s.pos.trType = TR_LINEAR;
+
+  // move a bit on the very first frame (necessary, so the delta upon first interpolation is ensured to be != 0)
+  bolt->s.pos.trTime = level.time - MISSILE_PRESTEP_TIME;		
+  
+  // bolt->s.pos.trBase = start		-> start of the trajectory
+  VectorCopy( start, bolt->s.pos.trBase );
+
+  // bolt->s.pos.trDelta = 900 * dir    -> velocity vector
+  VectorScale( dir, 900, bolt->s.pos.trDelta );
+  
+  // bolt->r.currentOrigin = start    -> "currentOrigin will be used for all collision detection and world linking"
+  VectorCopy (start, bolt->r.currentOrigin);
+
+  // save net bandwidth (internal optimization - can be ignored)
+  SnapVector( bolt->s.pos.trDelta );
+  
+  return bolt;
+}
 ```
-	
 	
 - Where are objects and object deltas sent to the client?
 - How does the client determine which model to display for which entity?
