@@ -556,7 +556,7 @@ other source listings, this is generic pseudo-code, and I'm just setting the
 `output*` variables instead of actually returning data. You'd have to adjust it
 for your own engine.
 
-Refer to [SECTION4.TXT](SECTION4.TXT) for a full source listing for this
+Refer to [SECTION4.TXT](./bsp_collision_detection/section4.txt) for a full source listing for this
 section.
 
 ```c
@@ -764,7 +764,7 @@ The modification we have done here is very similar to the one we made to
 And that's it! As you can see the modifications are pretty simple once you
 understand how the collision detection system works. If you call `TraceSphere`
 with the parameters you want, it will keep your movement from getting right up
-against things. Check out [SECTION5.TXT]() for a full source listing of this
+against things. Check out [SECTION5.TXT](./bsp_collision_detection/section5.txt) for a full source listing of this
 section.
 
 ## 6. Tracing with a Box
@@ -924,7 +924,7 @@ with the possibility of being a different size on each axis. So, we calculate
 the offset and perform a dot product, adding the offset to the two input
 points.
 
-And you're all done! See the file [SECTION6.TXT]() for a full source listing.
+And you're all done! See the file [SECTION6.TXT](./bsp_collision_detection/section6.txt) for a full source listing.
 
 ## 7. Conclusion
 

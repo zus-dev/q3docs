@@ -1,0 +1,178 @@
+float outputFraction;
+vector outputEnd;
+boolean outputStartsOut;
+boolean outputAllSolid;
+
+void Trace( vector inputStart, vector inputEnd )
+{
+	outputStartsOut = true;
+	outputAllSolid = false;
+	outputFraction = 1.0f;
+
+	// walk through the BSP tree
+	CheckNode( 0, 0.0f, 1.0f, inputStart, inputEnd );
+
+	if (outputFraction == 1.0f)
+	{	// nothing blocked the trace
+		outputEnd = inputEnd;
+	}
+	else
+	{	// collided with something 
+		for (i = 0; i < 3; i++)
+		{
+			outputEnd[i] = inputStart[i] + outputFraction * (inputEnd[i] - inputStart[i]);
+		}
+	}
+}
+
+void CheckNode( int nodeIndex, float startFraction, float endFraction, vector start, vector end )
+{
+	if (nodeIndex < 0)
+	{	// this is a leaf
+		object *leaf = &BSP.leaves[-(nodeIndex + 1)];
+		for (i = 0; i < leaf->numLeafBrushes; i++)
+		{
+			object *brush = &BSP.brushes[BSP.leafBrushes[leaf->firstLeafBrush + i]];
+			if (brush->numSides > 0 &&
+			    (BSP.shaders[brush->shaderIndex].contentFlags & 1))
+			{
+				CheckBrush( brush );
+			}
+		}
+
+		// don't have to do anything else for leaves
+		return;
+	}
+
+	// this is a node
+
+	object *node = &BSP.nodes[nodeIndex];
+	object *plane = &BSP.planes[node->planeIndex];
+
+	float startDistance = DotProduct( start, plane->normal ) - plane->distance;
+	float endDistance = DotProduct( end, plane->normal ) - plane->distance;
+
+	if (startDistance >= 0 && endDistance >= 0)
+	{	// both points are in front of the plane
+		// so check the front child
+		CheckNode( node->children[0], startFraction, endFraction, start, end );
+	}
+	else if (startDistance < 0 && endDistance < 0)
+	{	// both points are behind the plane
+		// so check the back child
+		CheckNode( node->children[1], startFraction, endFraction, start, end );
+	}
+	else
+	{	// the line spans the splitting plane
+		int side;
+		float fraction1, fraction2, middleFraction;
+		vector middle;
+
+		// split the segment into two
+		if (startDistance < endDistance)
+		{
+			side = 1; // back
+			float inverseDistance = 1.0f / (startDistance - endDistance);
+			fraction1 = (startDistance + EPSILON) * inverseDistance;
+			fraction2 = (startDistance + EPSILON) * inverseDistance;
+		}
+		else if (endDistance < startDistance)
+		{
+			side = 0; // front
+			float inverseDistance = 1.0f / (startDistance - endDistance);
+			fraction1 = (startDistance + EPSILON) * inverseDistance;
+			fraction2 = (startDistance - EPSILON) * inverseDistance;
+		}
+		else
+		{
+			side = 0; // front
+			fraction1 = 1.0f;
+			fraction2 = 0.0f;
+		}
+
+		// make sure the numbers are valid
+		if (fraction1 < 0.0f) fraction1 = 0.0f;
+		else if (fraction1 > 1.0f) fraction1 = 1.0f;
+		if (fraction2 < 0.0f) fraction2 = 0.0f;
+		else if (fraction2 > 1.0f) fraction2 = 1.0f;
+
+		// calculate the middle point for the first side
+		middleFraction = startFraction + (endFraction - startFraction) * fraction1;
+		for (i = 0; i < 3; i++)
+			middle[i] = start[i] + fraction1 * (end[i] - start[i]);
+
+		// check the first side
+		CheckNode( node->children[side], startFraction, middleFraction, start, middle );
+
+		// calculate the middle point for the second side
+		middleFraction = startFraction + (endFraction - startFraction) * fraction2;
+		for (i = 0; i < 3; i++)
+			middle[i] = start[i] + fraction2 * (end[i] - start[i]);
+
+		// check the second side
+		CheckNode( node->children[!side], middleFraction, endFraction, middle, end );
+	}
+}
+
+void CheckBrush( object *brush )
+{
+	float startFraction = -1.0f;
+	float endFraction = 1.0f;
+	boolean startsOut = false;
+	boolean endsOut = false;
+
+	for (int i = 0; i < brush->numSides; i++)
+	{
+		object *brushSide = &BSP.brushSides[brush->firstSide + i];
+		object *plane = &BSP.planes[brushSide->planeIndex];
+
+		float startDistance = DotProduct( inputStart, plane->normal ) - plane->distance;
+		float endDistance = DotProduct( inputEnd, plane->normal ) - plane->distance;
+
+		if (startDistance > 0)
+			startsOut = true;
+		if (endDistance > 0)
+			endsOut = true;
+
+		// make sure the trace isn't completely on one side of the brush
+		if (startDistance > 0 && endDistance > 0)
+		{   // both are in front of the plane, its outside of this brush
+			return;
+		}
+		if (startDistance <= 0 && endDistance <= 0)
+		{   // both are behind this plane, it will get clipped by another one
+			continue;
+		}
+
+		if (startDistance > endDistance)
+		{   // line is entering into the brush
+			float fraction = (startDistance - EPSILON) / (startDistance - endDistance);
+			if (fraction > startFraction)
+				startFraction = fraction;
+		}
+		else
+		{   // line is leaving the brush
+			float fraction = (startDistance + EPSILON) / (startDistance - endDistance);
+			if (fraction < endFraction)
+				endFraction = fraction;
+		}
+	}
+
+	if (startsOut == false)
+	{
+		outputStartOut = false;
+		if (endsOut == false)
+			outputAllSolid = true;
+		return;
+	}
+
+	if (startFraction < endFraction)
+	{
+		if (startFraction > -1 && startFraction < outputFraction)
+		{
+			if (startFraction < 0)
+				startFraction = 0;
+			outputFraction = startFraction;
+		}
+	}
+}
