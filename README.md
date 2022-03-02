@@ -19,6 +19,7 @@ Quake 3 documentation
 * [Focus on Mod Programming book](http://www.amazon.com/gp/product/193184156X/ref=as_li_tl?ie=UTF8&camp=1789&creative=390957&creativeASIN=193184156X&linkCode=as2&tag=ioq3-20&linkId=2B3B4QCCBDYACDYF)
 * [Code3Arena](https://www.per-thormann.de/quake-3-arena-coding-tutorials/)
 * [Quake 3 Shaders](http://www.heppler.com/shader/)
-* [Collection of patches for little extra functionality Q3A](https://www.icculus.org/~phaethon/q3/collection.html)
+* [Collection of patches for little extra functionality Q3A](https://www.icculus.org/~phaethon/q3/collection.html) [Mirror 1](http://www.linux.ucla.edu/~phaethon/q3/collection.html)
 * [Structures and Typed Enums Used in the Quake III Arena Source Code](http://linradiant.intron-trans.hu/docs/q3a_structures.html)
 * [Unofficial Quake 3 Map Specs](http://www.mralligator.com/q3/)
+* [Quagents's infos about their edits in ioquake3 code](https://www.cs.rochester.edu/trac/quagents/wiki/ioquake3)

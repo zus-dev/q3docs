@@ -21,6 +21,9 @@ The packets sent from the client to the server are handled in `sv_main.c` in `SV
 - `aas` Area Awareness System: Path-finding, collision detection etc
 - `ai` Artificial Intelligence: server-side
 - `ui` User Interface: client side
+- `Com_*` Common: common function
+- `svc_*` SerVer Command
+- `clc_*` CLient Command
 	
 # Naming conventions
 
@@ -239,4 +242,154 @@ gentity_t *fire_rocket (gentity_t *self, vec3_t start, vec3_t dir) {
 ```
 	
 - Where are objects and object deltas sent to the client?
+Server writes snapshot to client `server/sv_snapshot.c`:
+```c
+SV_WriteSnapshotToClient (client, msg) at code/server/sv_snapshot.c
+SV_SendClientSnapshot (client) at code/server/sv_snapshot.c
+SV_SendClientMessages () at code/server/sv_snapshot.c
+SV_Frame () at code/server/sv_main.c
+Com_Frame () at code/qcommon/common.c
+SDL_main ()
+```
+
+```c
+SV_WriteSnapshotToClient(client, msg)
+{
+    ...
+    // delta encode the playerstate
+    if ( oldframe ) {
+        MSG_WriteDeltaPlayerstate( msg, &oldframe->ps, &frame->ps );
+    } else {
+        MSG_WriteDeltaPlayerstate( msg, NULL, &frame->ps );
+    }
+
+    // delta encode the entities
+    SV_EmitPacketEntities (oldframe, frame, msg);
+    ...
+}
+```
+
+Client parses snapshot.
+If the snapshot is parsed properly, it will be copied to cl.snap and saved in
+cl.snapshots[].  If the snapshot is invalid for any reason, no changes to the
+state will be made at all.
+
+```c
+CL_ParseSnapshot (msg) at code/client/cl_parse.c
+CL_ParseServerMessage (msg) at code/client/cl_parse.c
+CL_PacketEvent (from, msg) at code/client/cl_main.c
+Com_EventLoop () at code/qcommon/common.c
+Com_Frame () at code/qcommon/common.c
+SDL_main ()
+```
+
+- Client-Server messages (packets)
+Server to client commands:
+```c
+// the svc_strings[] array in cl_parse.c should mirror this
+enum svc_ops_e {
+    svc_bad,
+    svc_nop,
+    svc_gamestate,
+    svc_configstring,           // [short] [string] only in gamestate messages
+    svc_baseline,               // only in gamestate messages
+    svc_serverCommand,          // [string] to be executed by client game module
+    svc_download,               // [short] size [size bytes]
+    svc_snapshot,
+    svc_EOF,
+};
+```
+
+Client to server commands:
+```c
+enum clc_ops_e {
+    clc_bad,
+    clc_nop,
+    clc_move,               // [[usercmd_t]
+    clc_moveNoDelta,        // [[usercmd_t]
+    clc_clientCommand,      // [string] message
+    clc_EOF,
+};
+```
+
+Client parses server packet:
+```c
+void CL_ParseServerMessage( msg_t *msg ) {
+    ...
+    // One message can have multiple commands?
+    while (1) {
+        // Read command type from server message 
+        cmd = MSG_ReadByte( msg );
+
+        if (cmd == svc_EOF) {
+            // The message has been read
+            SHOWNET( msg, "END OF MESSAGE" );
+            break;
+        }
+
+        switch ( cmd ) {
+        default:
+            Com_Error (ERR_DROP,"CL_ParseServerMessage: Illegible server message");
+            break;
+        case svc_nop:
+            break;
+        case svc_serverCommand:
+            CL_ParseCommandString( msg );
+            break;
+        case svc_gamestate:
+            CL_ParseGamestate( msg );
+            break;
+        case svc_snapshot:
+            CL_ParseSnapshot( msg );
+            break;
+        case svc_download:
+            CL_ParseDownload( msg );
+            break;
+        }
+        ...
+    }
+    ...
+}
+```
+
+Server parse client packet:
+```c
+void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
+	...
+    cl->messageAcknowledge = MSG_ReadLong( msg );
+    cl->reliableAcknowledge = MSG_ReadLong( msg );
+
+    // read optional clientCommand strings
+    do {
+        c = MSG_ReadByte( msg );
+
+        if ( c == clc_EOF ) {
+            break;
+        }
+
+        if ( c != clc_clientCommand ) {
+            break;
+        }
+        if ( !SV_ClientCommand( cl, msg ) ) {
+            return; // we couldn't execute it because of the flood protection
+        }
+        if (cl->state == CS_ZOMBIE) {
+            return; // disconnect command
+        }
+    } while ( 1 );
+
+    // read the usercmd_t
+    // this will invoke: SV_ClientThink (cl, &cmds[ i ]) -> vmMain(GAME_CLIENT_THINK)
+    if ( c == clc_move ) {
+        SV_UserMove( cl, msg, qtrue );
+    } else if ( c == clc_moveNoDelta ) {
+        SV_UserMove( cl, msg, qfalse );
+    } else if ( c != clc_EOF ) {
+        Com_Printf( "WARNING: bad command byte for client %i\n", (int) (cl - svs.clients) );
+    }
+	...
+}
+```
+
 - How does the client determine which model to display for which entity?
+
