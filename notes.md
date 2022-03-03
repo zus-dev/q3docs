@@ -397,10 +397,8 @@ void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 
 - How client events are working (`game/g_active.c`)?
 ```c
-/*
-Events will be passed on to the clients for presentation,
-but any server game effects are handled here
-*/
+// Events will be passed on to the clients for presentation,
+// but any server game effects are handled here
 void ClientEvents( gentity_t *ent, int oldEventSequence ) {
     ...
 }
@@ -454,6 +452,36 @@ Com_EventLoop {
 ```
 
 How command is executed based on `cmd_text`?
+At the init state:
+```c
+Cbuf_Execute () at code/qcommon/cmd.c
+Com_ExecuteCfg () at code/qcommon/common.c
+Com_Init (commandLine) at code/qcommon/common.c
+```
+
+While event loop (frame):
+```c
+// 1. Read key and parse binding which will set cmd_text for the key
+CL_KeyDownEvent (key, time) at code/client/cl_keys.c
+CL_KeyEvent (key, down=qtrue, time) at code/client/cl_keys.c
+Com_EventLoop () at code/qcommon/common.c
+Com_Frame () at code/qcommon/common.c
+
+// 2. Execute cmd_text
+// A complete command line has been parsed, so try to execute it
+Cmd_ExecuteString( text ) at code/qcommon/cmd.c 
+Cbuf_Execute () at code/qcommon/cmd.c
+Com_Frame () at code/qcommon/common.c
+```
+
+```c
+CL_CmdButtons (cmd) at code/client/cl_input.c
+CL_CreateCmd () at code/client/cl_input.c
+CL_CreateNewCommands () at code/client/cl_input.c
+CL_SendCmd () at code/client/cl_input.c
+CL_Frame () at code/client/cl_main.c
+Com_Frame () at code/qcommon/common.c
+```
 
 ```c
 void CL_CmdButtons( usercmd_t *cmd ) {
@@ -469,6 +497,9 @@ void CL_CmdButtons( usercmd_t *cmd ) {
     ... 
 }
 ```
+
+
+How `pm->cmd` is set?
 
 Generate event from button pressed: 
 ```c
@@ -490,7 +521,89 @@ static void PM_Weapon( void ) {
 }
 ```
 
+Server side:
+```c
+PM_Weapon () at code/game/bg_pmove.c
+PmoveSingle (pmove) at code/game/bg_pmove.c
+{
+    // Update global pm variable now pm->cmd points to the latest usercmd_t
+    pm = pmove;
+}
+Pmove (pmove) at code/game/bg_pmove.c
+ClientThink_real (ent) at code/game/g_active.c
+{
+    // Local player move variable
+    pmove_t     pm;
+    usercmd_t   *ucmd;
+
+    ucmd = &ent->client->pers.cmd;
+    // Set player move properties
+    pm.cmd = *ucmd;
+
+    Pmove(&pm);
+
+}
+ClientThink (clientNum) at code/game/g_active.c
+{
+    // Get the usercmd for clientNum
+    trap_GetUsercmd( clientNum, &ent->client->pers.cmd );
+}
+vmMain (command=7 [GAME_CLIENT_THINK], ...) at code/game/g_main.c
+VM_Call (vm, callnum=7) at code/qcommon/vm.c
+SV_ClientThink (cl, cmd) at code/server/sv_client.c
+SV_UserMove (cl, msg, delta=qtrue) at code/server/sv_client.c
+SV_ExecuteClientMessage (cl, msg) at code/server/sv_client.c
+SV_PacketEvent (from=..., msg) at code/server/sv_main.c
+Com_RunAndTimeServerPacket (evFrom, buf) at code/qcommon/common.c
+Com_EventLoop () at code/qcommon/common.c
+Com_Frame () at code/qcommon/common.c
+```
+
+Client Size:
+```c
+PM_Weapon () at code/game/bg_pmove.c
+PmoveSingle (pmove) at code/game/bg_pmove.c
+{
+    // Update global pm variable now pm->cmd points to the latest usercmd_t
+    pm = pmove;
+}
+Pmove (pmove) at code/game/bg_pmove.c
+CG_PredictPlayerState () at code/cgame/cg_predict.c
+{
+    // demo playback just copies the moves
+    if ( cg.demoPlayback || (cg.snap->ps.pm_flags & PMF_FOLLOW) ) {
+        CG_InterpolatePlayerState( qfalse );
+        return;
+    }
+
+    // non-predicting local movement will grab the latest angles
+    if ( cg_nopredict.integer || cg_synchronousClients.integer ) {
+        CG_InterpolatePlayerState( qtrue );
+        return;
+    }
+
+    // cg_pmove - global var
+    trap_GetUserCmd( cmdNum, &cg_pmove.cmd );
+    Pmove (&cg_pmove);
+}
+CG_DrawActiveFrame (serverTime, stereoView=STEREO_CENTER, demoPlayback=qfalse) at code/cgame/cg_view.c
+vmMain (command=3 [CG_DRAW_ACTIVE_FRAME], ...) at code/cgame/cg_main.c
+VM_Call (vm=, callnum=3) at code/qcommon/vm.c
+CL_CGameRendering (stereo=STEREO_CENTER) at code/client/cl_cgame.c
+SCR_DrawScreenField (stereoFrame=STEREO_CENTER) at code/client/cl_scrn.c
+SCR_UpdateScreen () at code/client/cl_scrn.c
+CL_Frame (msec) at code/client/cl_main.c
+Com_Frame () at code/qcommon/common.c
+```
+
 - How Animation works?
 ```c
 TODO: check PM_StartTorsoAnim( TORSO_ATTACK2 );
+```
+
+- How Entity Events work?
+```c
+entity_event_t;
+
+void BG_AddPredictableEventToPlayerstate( int newEvent, int eventParm, playerState_t *ps )
 ```
