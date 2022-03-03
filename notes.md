@@ -246,7 +246,9 @@ gentity_t *fire_rocket (gentity_t *self, vec3_t start, vec3_t dir) {
 ```
 	
 - Where are objects and object deltas sent to the client?
+
 Server writes snapshot to client `server/sv_snapshot.c`:
+
 ```c
 SV_WriteSnapshotToClient (client, msg) at code/server/sv_snapshot.c
 SV_SendClientSnapshot (client) at code/server/sv_snapshot.c
@@ -274,6 +276,7 @@ SV_WriteSnapshotToClient(client, msg)
 ```
 
 Client parses snapshot.
+
 If the snapshot is parsed properly, it will be copied to cl.snap and saved in
 cl.snapshots[].  If the snapshot is invalid for any reason, no changes to the
 state will be made at all.
@@ -287,8 +290,10 @@ Com_Frame () at code/qcommon/common.c
 SDL_main ()
 ```
 
-- Client-Server messages (packets)
+- How Client-Server messages (packets) are working?
+
 Server to client commands:
+
 ```c
 // the svc_strings[] array in cl_parse.c should mirror this
 enum svc_ops_e {
@@ -305,6 +310,7 @@ enum svc_ops_e {
 ```
 
 Client to server commands:
+
 ```c
 enum clc_ops_e {
     clc_bad,
@@ -317,6 +323,7 @@ enum clc_ops_e {
 ```
 
 Client parses server packet:
+
 ```c
 void CL_ParseServerMessage( msg_t *msg ) {
     ...
@@ -357,6 +364,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 ```
 
 Server parse client packet:
+
 ```c
 void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 	...
@@ -397,7 +405,15 @@ void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 
 - How does the client determine which model to display for which entity?
 
+```c
+    // TODO: How a model is being loaded?
+    // looks like it adds a model to the config string and sends it to client
+    // then client loads it.
+    ent->s.modelindex = G_ModelIndex( ent->model );
+```
+
 - How client events are working (`game/g_active.c`)?
+
 ```c
 // Events will be passed on to the clients for presentation,
 // but any server game effects are handled here
@@ -408,7 +424,7 @@ void ClientEvents( gentity_t *ent, int oldEventSequence ) {
 
 - How button binding works?
 
-`client/cl_input.c`:
+At `client/cl_input.c`:
 ```c
 void IN_KeyDown( kbutton_t *b ) {
 ...
@@ -453,8 +469,10 @@ Com_EventLoop {
 }
 ```
 
-How command is executed based on `cmd_text`?
+- How command is executed based on `cmd_text`?
+
 At the init state:
+
 ```c
 Cbuf_Execute () at code/qcommon/cmd.c
 Com_ExecuteCfg () at code/qcommon/common.c
@@ -462,6 +480,7 @@ Com_Init (commandLine) at code/qcommon/common.c
 ```
 
 While event loop (frame):
+
 ```c
 // 1. Read key and parse binding which will set cmd_text for the key
 CL_KeyDownEvent (key, time) at code/client/cl_keys.c
@@ -476,7 +495,7 @@ Cbuf_Execute () at code/qcommon/cmd.c
 Com_Frame () at code/qcommon/common.c
 ```
 
-How `cmd->buttons` is set?
+- How `cmd->buttons` is set?
 
 ```c
 CL_CmdButtons (cmd) at code/client/cl_input.c
@@ -502,8 +521,10 @@ void CL_CmdButtons( usercmd_t *cmd ) {
 }
 ```
 
-How `pm->cmd` is set?
+- How `pm->cmd` is set?
+
 Server side:
+
 ```c
 PM_Weapon () at code/game/bg_pmove.c
 PmoveSingle (pmove) at code/game/bg_pmove.c
@@ -542,6 +563,7 @@ Com_Frame () at code/qcommon/common.c
 ```
 
 Client Size:
+
 ```c
 PM_Weapon () at code/game/bg_pmove.c
 PmoveSingle (pmove) at code/game/bg_pmove.c
@@ -578,7 +600,8 @@ CL_Frame (msec) at code/client/cl_main.c
 Com_Frame () at code/qcommon/common.c
 ```
 
-Generate event from button pressed: 
+Generate event from button pressed (e.g. for `+attack`):
+
 ```c
 // Generates weapon events and modifes the weapon counter
 static void PM_Weapon( void ) {
@@ -599,11 +622,13 @@ static void PM_Weapon( void ) {
 ```
 
 - How Animation works?
+
 ```c
 TODO: check PM_StartTorsoAnim( TORSO_ATTACK2 );
 ```
 
 - How Entity Events work?
+
 ```c
 entity_event_t;
 
