@@ -474,6 +474,8 @@ Cbuf_Execute () at code/qcommon/cmd.c
 Com_Frame () at code/qcommon/common.c
 ```
 
+How `cmd->buttons` is set?
+
 ```c
 CL_CmdButtons (cmd) at code/client/cl_input.c
 CL_CreateCmd () at code/client/cl_input.c
@@ -498,29 +500,7 @@ void CL_CmdButtons( usercmd_t *cmd ) {
 }
 ```
 
-
 How `pm->cmd` is set?
-
-Generate event from button pressed: 
-```c
-// Generates weapon events and modifes the weapon counter
-static void PM_Weapon( void ) {
-    ... 
-    // check for fire
-    if ( ! (pm->cmd.buttons & BUTTON_ATTACK) ) {
-        return;
-    }
-    ...
-    // fire weapon
-    PM_AddEvent( EV_FIRE_WEAPON ) {
-        BG_AddPredictableEventToPlayerstate( newEvent, 0, pm->ps );
-        // client starts predicted animation immediately
-        // server handles player state event EV_FIRE_WEAPON
-    }
-    ...
-}
-```
-
 Server side:
 ```c
 PM_Weapon () at code/game/bg_pmove.c
@@ -594,6 +574,26 @@ SCR_DrawScreenField (stereoFrame=STEREO_CENTER) at code/client/cl_scrn.c
 SCR_UpdateScreen () at code/client/cl_scrn.c
 CL_Frame (msec) at code/client/cl_main.c
 Com_Frame () at code/qcommon/common.c
+```
+
+Generate event from button pressed: 
+```c
+// Generates weapon events and modifes the weapon counter
+static void PM_Weapon( void ) {
+    ... 
+    // check for fire
+    if ( ! (pm->cmd.buttons & BUTTON_ATTACK) ) {
+        return;
+    }
+    ...
+    // fire weapon
+    PM_AddEvent( EV_FIRE_WEAPON ) {
+        BG_AddPredictableEventToPlayerstate( newEvent, 0, pm->ps );
+        // client starts predicted animation immediately
+        // server handles player state event EV_FIRE_WEAPON
+    }
+    ...
+}
 ```
 
 - How Animation works?
