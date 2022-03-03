@@ -185,7 +185,9 @@ gentity_t *fire_rocket (gentity_t *self, vec3_t start, vec3_t dir) {
   // function to be called after thinkDelayMillis; for example: G_ExplodeMissile
   bolt->think = thinkCallback; 
 
-  // the type of event to be triggered (used in AI for determining threat level of object; and in the client to determine model, sounds etc)
+  // the type of event to be triggered 
+  // used in AI for determining threat level of object; 
+  // and in the client to determine model, sounds etc
   bolt->s.eType = ET_MISSILE; 
 
   // "entity->r.currentOrigin instead of entity->s.origin" (see g_public.h)
