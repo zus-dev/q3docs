@@ -73,13 +73,13 @@ Also see [The Matrix and Quaternions FAQ](https://www.flipcode.com/documents/mat
 ```c
 static void CG_Panel( centity_t *cent) {
     qhandle_t panelShader;
-	polyVert_t verts[4];
+    polyVert_t verts[4];
     // half-size actually
     int size = 8;
     // initial offset of the polygon
     int offsetX = -16;
 
-	panelShader  = trap_R_RegisterShader( "gfx/misc/tracer" );
+    panelShader  = trap_R_RegisterShader( "gfx/misc/tracer" );
     if (!panelShader) {
         // TODO: Show warning!
         return;
@@ -97,14 +97,14 @@ static void CG_Panel( centity_t *cent) {
     VectorCopy(cent->lerpOrigin, origin);
     
     // Rotate and move polygon
-	vec3_t	matrix[3], transpose[3];
-	vec3_t	deltaAngles;
+    vec3_t	matrix[3], transpose[3];
+    vec3_t	deltaAngles;
     // e.g.: VectorSet(deltaAngles, 45, 0, 0);
     VectorCopy(cent->currentState.angles, deltaAngles);
 
-	// origin change when on a rotating object
-	CG_CreateRotationMatrix( deltaAngles, transpose );
-	CG_TransposeMatrix( transpose, matrix );
+    // origin change when on a rotating object
+    CG_CreateRotationMatrix( deltaAngles, transpose );
+    CG_TransposeMatrix( transpose, matrix );
   
     int i;
     for (i = 0; i < 4; i++) {
@@ -158,17 +158,17 @@ static void CG_Panel( centity_t *cent) {
         }
     }
 
-	// set the polygon's texture coordinates
-	verts[0].st[0] = 0;
-	verts[0].st[1] = 0;
-	verts[1].st[0] = 0;
-	verts[1].st[1] = 1;
-	verts[2].st[0] = 1;
-	verts[2].st[1] = 1;
-	verts[3].st[0] = 1;
-	verts[3].st[1] = 0;
+    // set the polygon's texture coordinates
+    verts[0].st[0] = 0;
+    verts[0].st[1] = 0;
+    verts[1].st[0] = 0;
+    verts[1].st[1] = 1;
+    verts[2].st[0] = 1;
+    verts[2].st[1] = 1;
+    verts[3].st[0] = 1;
+    verts[3].st[1] = 0;
 
-	trap_R_AddPolyToScene( panelShader, 4, verts );
+    trap_R_AddPolyToScene( panelShader, 4, verts );
 
     if (drawCursor) {
         int cursorSize = 1;
