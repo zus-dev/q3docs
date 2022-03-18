@@ -24,6 +24,8 @@ The packets sent from the client to the server are handled in `sv_main.c` in `SV
 - `Com_*` Common: common function
 - `svc_*` SerVer Command
 - `clc_*` CLient Command
+- `VectorMA` Vector Multiply-Add 
+- `trap_CM` e.g. `trap_CM_BoxTrace` Collision Model? 
 	
 # Naming conventions
 
@@ -406,6 +408,7 @@ void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 - How does the client determine which model to display for which entity?
 
 ```c
+    ent->model = "models/cube.md3"; 
     // TODO: How a model is being loaded?
     // looks like it adds a model to the config string and sends it to client
     // then client loads it.
@@ -562,7 +565,7 @@ Com_EventLoop () at code/qcommon/common.c
 Com_Frame () at code/qcommon/common.c
 ```
 
-Client Size:
+Client side:
 
 ```c
 PM_Weapon () at code/game/bg_pmove.c
@@ -633,4 +636,21 @@ TODO: check PM_StartTorsoAnim( TORSO_ATTACK2 );
 entity_event_t;
 
 void BG_AddPredictableEventToPlayerstate( int newEvent, int eventParm, playerState_t *ps )
+```
+
+- How entities added and interpolated on the client?
+
+Entities position and movers are interpolated here:
+```c
+CG_CalcEntityLerpPositions (cent) at code/cgame/cg_ents.c
+CG_AddCEntity (cent) at code/cgame/cg_ents.c
+CG_AddPacketEntities () at code/cgame/cg_ents.c
+CG_DrawActiveFrame () at code/cgame/cg_view.c
+vmMain (command=3) at code/cgame/cg_main.c
+VM_Call (vm, callnum=3) at code/qcommon/vm.c
+CL_CGameRendering (stereo=STEREO_CENTER) at code/client/cl_cgame.c
+SCR_DrawScreenField (stereoFrame=STEREO_CENTER) at code/client/cl_scrn.c
+SCR_UpdateScreen () at code/client/cl_scrn.c
+CL_Frame () at code/client/cl_main.c
+Com_Frame () at code/qcommon/common.c
 ```

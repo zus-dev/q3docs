@@ -10,6 +10,7 @@ Quake 3 documentation
 * [Cluster Grenade](./tutorials/cluster_grenade.md)
 * [Gravity Well](./tutorials/gravity_well.md)
 * [BSP Collision Detection](./tutorials/bsp_collision_detection.md)
+* [Interactive Panel](./tutorials/interactive_panel.md)
 
 ## References
 * [Quake 3 Network Protocol](https://www.jfedor.org/quake3/)
