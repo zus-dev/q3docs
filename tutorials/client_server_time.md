@@ -1,4 +1,4 @@
-# How clinent and server time works?
+# How client and server time works?
 
 How `snap->serverTime` is set?
 

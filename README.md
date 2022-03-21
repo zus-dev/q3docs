@@ -11,7 +11,7 @@ Quake 3 documentation
 * [Gravity Well](./tutorials/gravity_well.md)
 * [BSP Collision Detection](./tutorials/bsp_collision_detection.md)
 * [Interactive Panel](./tutorials/interactive_panel.md)
-* [How clinent and server time works](./tutorials/client_server_time.md)
+* [How client and server time works](./tutorials/client_server_time.md)
 
 ## References
 * [Quake 3 Network Protocol](https://www.jfedor.org/quake3/)
