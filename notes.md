@@ -249,6 +249,21 @@ gentity_t *fire_rocket (gentity_t *self, vec3_t start, vec3_t dir) {
 	
 - Where are objects and object deltas sent to the client?
 
+A normal server packet will look like:                             
+```
+4   sequence number (high bit set if an oversize fragment)         
+<optional reliable commands>                                       
+1   svc_snapshot                                                   
+4   last client reliable command                                   
+4   serverTime                                                     
+1   lastframe for delta compression                                
+1   snapFlags                                                      
+1   areaBytes                                                      
+<areabytes>                                                        
+<playerstate>                                                      
+<packetentities>                                                   
+```
+
 Server writes snapshot to client `server/sv_snapshot.c`:
 
 ```c
