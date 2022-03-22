@@ -159,15 +159,50 @@ CG_DrawActiveFrame: serverTime:8926
 CG_DrawActiveFrame: serverTime:8943
 G_RunFrame: levelTime:9000
 CG_DrawActiveFrame: serverTime:8960
-CG_DrawActiveFrame: serverTime:8975
-CG_DrawActiveFrame: serverTime:8991
-CG_DrawActiveFrame: serverTime:9008
-CG_DrawActiveFrame: serverTime:9025
-CG_DrawActiveFrame: serverTime:9042
-CG_DrawActiveFrame: serverTime:9059
-CG_DrawActiveFrame: serverTime:9075
-CG_DrawActiveFrame: serverTime:9092
-CG_DrawActiveFrame: serverTime:9108
-CG_DrawActiveFrame: serverTime:9125
-CG_DrawActiveFrame: serverTime:9142
+...
+```
+
+Server delta time is set upon receiving first active snapshot (snap with entities):
+
+```c
+CL_SetCGameTime() 
+{
+    // set on parse of any valid packet
+    if ( cl.newSnapshots ) {
+        cl.newSnapshots = qfalse;
+        CL_FirstSnapshot() 
+        {
+            // set the timedelta so we are exactly on this first frame
+            cl.serverTimeDelta = cl.snap.serverTime - cls.realtime;
+            cl.oldServerTime = cl.snap.serverTime;
+        }
+    }
+}
+```
+The example below shows how client sets delta and adjust real client time to the server time:
+```c
+G_RunFrame: levelTime:850
+G_RunFrame: levelTime:900
+G_RunFrame: levelTime:950
+G_RunFrame: levelTime:1000
+CL_FirstSnapshot: cl.serverTimeDelta:399
+CL_SetCGameTime: cl.serverTime:1000 = (cls.realtime:601) + (cl.serverTimeDelta:399) - (tn:0)
+CG_DrawActiveFrame: serverTime:1000 cg.snap->serverTime:1000 cg.nextSnap->serverTime:0
+CL_SetCGameTime: cl.serverTime:1016 = (cls.realtime:617) + (cl.serverTimeDelta:399) - (tn:0)
+CG_DrawActiveFrame: serverTime:1016 cg.snap->serverTime:1000 cg.nextSnap->serverTime:0
+CL_SetCGameTime: cl.serverTime:1033 = (cls.realtime:634) + (cl.serverTimeDelta:399) - (tn:0)
+CG_DrawActiveFrame: serverTime:1033 cg.snap->serverTime:1000 cg.nextSnap->serverTime:0
+G_RunFrame: levelTime:1050
+CL_SetCGameTime: cl.serverTime:1050 = (cls.realtime:651) + (cl.serverTimeDelta:399) - (tn:0)
+CL_AdjustTimeDelta: newDelta:399 cl.serverTimeDelta:397 <slow drift adjust>
+CG_DrawActiveFrame: serverTime:1050 cg.snap->serverTime:1050 cg.nextSnap->serverTime:0
+CL_SetCGameTime: cl.serverTime:1065 = (cls.realtime:668) + (cl.serverTimeDelta:397) - (tn:0)
+CG_DrawActiveFrame: serverTime:1065 cg.snap->serverTime:1050 cg.nextSnap->serverTime:0
+CL_SetCGameTime: cl.serverTime:1083 = (cls.realtime:686) + (cl.serverTimeDelta:397) - (tn:0)
+CG_DrawActiveFrame: serverTime:1083 cg.snap->serverTime:1050 cg.nextSnap->serverTime:0
+G_RunFrame: levelTime:1100
+CL_SetCGameTime: cl.serverTime:1099 = (cls.realtime:702) + (cl.serverTimeDelta:397) - (tn:0)
+CL_AdjustTimeDelta: newDelta:398 cl.serverTimeDelta:395 <slow drift adjust>
+CG_DrawActiveFrame: serverTime:1099 cg.snap->serverTime:1050 cg.nextSnap->serverTime:1100
+...
 ```
