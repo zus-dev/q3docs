@@ -669,3 +669,33 @@ SCR_UpdateScreen () at code/client/cl_scrn.c
 CL_Frame () at code/client/cl_main.c
 Com_Frame () at code/qcommon/common.c
 ```
+
+- Where client/player animation is updated?
+
+See `CG_PlayerAnimation` at  `cgame/cg_players.c` 
+
+- How to render current position insted of inerpolated?
+
+e.g. for Movers 
+Server at `game/g_mover.c`:
+```c
+void G_RunMover( gentity_t *ent ) {
+    ...
+    // After mover trajectory updated:
+    G_MoverTeam( ent );
+    // Copy current origin to shared/snapshot origin
+    // to let the client know what server knows
+    VectorCopy( ent->r.currentOrigin, ent->s.origin );
+
+```
+
+Client at `cgame/cg_ents.c`:
+```c
+static void CG_Mover( centity_t *cent ) {
+    ...
+    // render real mover postion instead of interpolated:
+    // replace:
+    // VectorCopy( cent->lerpOrigin, ent.origin);
+    // with:
+    VectorCopy( cent->currentState.origin, ent.origin );
+```
